@@ -43,6 +43,7 @@ nav > .container {
 }
 
 nav .brand-logo {
+    position: static;
     padding: 0 10px;
 }
 
@@ -67,15 +68,22 @@ nav #menu-right {
     right: 0px;
 }
 
+.nav-wrapper {
+    display: flex;
+    align-items: center;
+}
+
+.nav-wrapper > ul.left,
+.nav-wrapper > ul.right {
+    float: none;
+    flex-shrink: 0;
+}
+
 .header-search {
-    margin: 10px 0 0;
-    width: calc(100% - 580px);
-    max-width: 680px;
+    flex: 1 1 auto;
+    margin: 0 10px;
     height: 40px;
-    float: left;
     position: relative;
-    left: 50%;
-    transform: translateX(-50%);
 }
 
 .header-search i {
@@ -337,13 +345,22 @@ foooter a,
      transform:none
     }
 
+    .nav-wrapper {
+        display: block;
+    }
+
+    .nav-wrapper > ul.left,
+    .nav-wrapper > ul.right {
+        float: left;
+    }
+
+    .nav-wrapper > ul.right {
+        float: right;
+    }
+
     .header-search {
-        float: none;
-        left: auto;
-        transform: none;
         margin: 10px auto 0 40px;
         width: calc(100% - 50px);
-        max-width: none;
         height: 40px;
         display: inline-block;
         position: relative;
