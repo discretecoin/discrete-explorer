@@ -37,6 +37,11 @@ nav{
     padding: 0 10px 0 10px;
 }
 
+nav > .container {
+    width: 95%;
+    max-width: initial;
+}
+
 nav .brand-logo {
     padding: 0 10px;
 }
@@ -63,11 +68,14 @@ nav #menu-right {
 }
 
 .header-search {
-    margin: 10px auto 0 280px;
-    width: calc(100% - 600px);
+    margin: 10px 0 0;
+    width: calc(100% - 580px);
+    max-width: 680px;
     height: 40px;
-    display: inline-block;
+    float: left;
     position: relative;
+    left: 50%;
+    transform: translateX(-50%);
 }
 
 .header-search i {
@@ -330,8 +338,12 @@ foooter a,
     }
 
     .header-search {
+        float: none;
+        left: auto;
+        transform: none;
         margin: 10px auto 0 40px;
         width: calc(100% - 50px);
+        max-width: none;
         height: 40px;
         display: inline-block;
         position: relative;

@@ -1,0 +1,132 @@
+<div style="height: 10px; clear: both;"></div>
+<div class="row">
+	<div class="col s12">
+		<div class="card hoverable">
+			<div class="card-action grey lighten-5">
+				<h2 class="light-blue-text text-darken-4"><i class="fas fa-cog"></i>  Settings</h2>
+			</div>
+			<div class="card-content">
+				<div class="row">
+					<div class="col s12 l6">
+						<h5>Node Selection</h5>
+						<p>Select a node to connect to, or enter a custom node URL.</p>
+						<div id="node_list">
+						</div>
+						<div class="input-field col s12" style="padding: 0;">
+							<input id="custom_node_url" type="text" class="validate" placeholder="https://node.example.com:32448">
+							<label for="custom_node_url">Custom node URL</label>
+						</div>
+						<div class="input-field col s12" style="padding: 0;">
+							<a id="btn_set_custom_node" class="waves-effect waves-light btn light-blue darken-4"><i class="fas fa-plug"></i> Connect to custom node</a>
+							<a id="btn_reset_node" class="waves-effect waves-light btn grey darken-1" style="margin-left: 10px;"><i class="fas fa-undo"></i> Reset</a>
+						</div>
+					</div>
+					<div class="col s12 l6">
+						<h5>Current Connection</h5>
+						<ul class="collection">
+							<li class="collection-item">
+								<i class="fas fa-server fa-fw"></i> Node: <strong id="settings_current_node"></strong>
+							</li>
+							<li class="collection-item">
+								<i class="fas fa-circle fa-fw" id="settings_status_icon"></i> Status: <span id="settings_node_status"></span>
+							</li>
+							<li class="collection-item">
+								<i class="fas fa-flag fa-fw"></i> Version: <span id="settings_node_version">...</span>
+							</li>
+							<li class="collection-item">
+								<i class="fas fa-bars fa-fw"></i> Height: <span id="settings_node_height">...</span>
+							</li>
+						</ul>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script>
+	currentPage = {
+		destroy: function () {},
+		init: function () {
+			M.updateTextFields();
+			renderNodeList();
+			updateCurrentNode();
+		},
+		update: function () {
+			updateCurrentNode();
+		}
+	};
+
+	function renderNodeList() {
+		var $list = $('#node_list');
+		$list.empty();
+		for (var i = 0; i < apiList.length; i++) {
+			var nodeUrl = apiList[i];
+			var isActive = (nodeUrl === api);
+			var $item = $('<p>' +
+				'<label>' +
+				'<input class="with-gap node-radio" type="radio" name="node_selection" value="' + nodeUrl + '"' + (isActive ? ' checked' : '') + '>' +
+				'<span>' + nodeUrl + (isActive ? ' <span class="badge light-blue white-text" style="float:none;">active</span>' : '') + '</span>' +
+				'</label>' +
+				'</p>');
+			$list.append($item);
+		}
+
+		// Check custom node if current api is not in the list
+		var inList = apiList.indexOf(api) !== -1;
+		if (!inList) {
+			$('#custom_node_url').val(api);
+		}
+
+		$('.node-radio').on('change', function () {
+			var selected = $(this).val();
+			switchNode(selected);
+		});
+	}
+
+	function switchNode(nodeUrl) {
+		api = nodeUrl;
+		$.cookie('custom_node', nodeUrl, { expires: 365, path: '/' });
+		M.toast({html: 'Switched to ' + nodeUrl, classes: 'light-blue darken-4'}, 3000);
+		renderNodeList();
+		updateCurrentNode();
+		fetchLiveStats();
+	}
+
+	$('#btn_set_custom_node').click(function () {
+		var customUrl = $('#custom_node_url').val().trim();
+		if (!customUrl) {
+			M.toast({html: 'Enter a node URL', classes: 'red'}, 3000);
+			return;
+		}
+		if (customUrl.endsWith('/')) {
+			customUrl = customUrl.slice(0, -1);
+		}
+		switchNode(customUrl);
+	});
+
+	$('#btn_reset_node').click(function () {
+		$.removeCookie('custom_node', { path: '/' });
+		var randInt = Math.floor(Math.random() * Math.floor(apiList.length));
+		api = apiList[randInt];
+		M.toast({html: 'Reset to random node: ' + api, classes: 'light-blue darken-4'}, 3000);
+		renderNodeList();
+		updateCurrentNode();
+		fetchLiveStats();
+	});
+
+	function updateCurrentNode() {
+		$('#settings_current_node').text(api);
+		if (nodeStatus) {
+			$('#settings_node_status').text('Online').addClass('teal-text').removeClass('red-text');
+			$('#settings_status_icon').addClass('teal-text').removeClass('red-text');
+			if (lastStats) {
+				$('#settings_node_height').text(lastStats.height || '...');
+				$('#settings_node_version').text(lastStats.version || '...');
+			}
+		} else {
+			$('#settings_node_status').text('Offline').addClass('red-text').removeClass('teal-text');
+			$('#settings_status_icon').addClass('red-text').removeClass('teal-text');
+		}
+	}
+</script>

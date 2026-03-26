@@ -461,8 +461,14 @@ jQuery(function ($) {
 
 
 $(function () {
-    let randInt = Math.floor(Math.random() * Math.floor(apiList.length));
-    api = apiList[randInt];
-    
+    // Load saved node from cookie, fall back to random
+    var savedNode = $.cookie('custom_node');
+    if (savedNode) {
+        api = savedNode;
+    } else {
+        let randInt = Math.floor(Math.random() * Math.floor(apiList.length));
+        api = apiList[randInt];
+    }
+
     getinfo();
 });
