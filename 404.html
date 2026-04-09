@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Karbo Explorer Redirect</title>
+    <script>
+        (function () {
+            var path = window.location.pathname || '/';
+            var isExplorerRoute = /^\/(?:block|transaction|payment-id|address)\/[^/]+\/?$/.test(path) ||
+                /^\/(?:nodes|alt-blocks|tools|broadcast-transaction|check-funds|check-payment|validate-address|verify-message|amount-converter|payment-id-tools|paper-wallet|settings)\/?$/.test(path);
+
+            if (!isExplorerRoute) {
+                return;
+            }
+
+            sessionStorage.setItem('explorer_redirect_path', path + window.location.search + window.location.hash);
+            window.location.replace('/');
+        })();
+    </script>
+</head>
+<body>
+    <p>Redirecting back to the Karbo explorer...</p>
+</body>
+</html>

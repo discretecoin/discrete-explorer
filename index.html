@@ -1,304 +1,1385 @@
 <!DOCTYPE html>
-<html>
-<head lang="en">
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1">
-	<title>Karbo (&#1180;) [KRB] Block Explorer</title>
-	<script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
-	<script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/jquery-timeago/1.4.0/jquery.timeago.min.js"></script>
-	<script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/jquery-sparklines/2.1.2/jquery.sparkline.min.js"></script>
-	<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
-	<script type="text/javascript" src="config.js"></script>
-	<script type="text/javascript" src="js/cookie.js"></script>
-	<script type="text/javascript" src="js/main.js"></script>
-	<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.1/css/all.css">
-	<link rel="stylesheet" href="//fonts.googleapis.com/css?family=Inconsolata">
-	<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
-	<link rel="stylesheet" href="css/styles.css" type="text/css">
-	<link rel="shortcut icon" href="favicon.ico">
-	<link rel="icon" type="image/icon" href="favicon.ico">
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Karbo Explorer</title>
+    <meta name="description" content="Modern Karbo blockchain explorer with clean routing, responsive layouts, and live network data.">
+    <script>
+        (function () {
+            var redirectedPath = sessionStorage.getItem('explorer_redirect_path');
+            if (!redirectedPath) return;
+
+            sessionStorage.removeItem('explorer_redirect_path');
+            if (window.location.pathname === '/' || /\/index\.html$/.test(window.location.pathname)) {
+                window.history.replaceState(null, '', redirectedPath);
+            }
+        })();
+    </script>
+    <script src="/config.js"></script>
+    <script src="https://unpkg.com/vue@3.5.21/dist/vue.global.prod.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.1/css/all.css">
+    <link rel="stylesheet" href="/css/app.css">
+    <link rel="shortcut icon" href="/favicon.ico">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
 </head>
 <body>
-<header id="header" class="page-topbar">
-	<div class="navbar-fixed">
-		<nav class="navbar-color light-blue darken-4">
-			<div class="container">
-				<div class="nav-wrapper">
-					<ul class="left">
-						<li>
-							<a class="brand-logo" href="./"><span id="coin_icon">
-									<svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" version="1.1"
-										style="shape-rendering:geometricPrecision; text-rendering:geometricPrecision; image-rendering:optimizeQuality; fill-rule:evenodd; clip-rule:evenodd"
-										viewBox="0 0 2500000 2500000" xmlns:xlink="http://www.w3.org/1999/xlink"
-										width="32px" height="32px">
-										<g id="krb-logo">
-											<path fill="#01579b"
-												d="M1251219 1162750c18009,-3203 34019,-10006 48025,-20412 14009,-10407 27215,-28016 39622,-52029l275750 -538290c10803,-18010 24012,-32419 39218,-43625 15210,-10806 33219,-16410 53232,-16410l174893 0 -343384 633144c-15209,26016 -32419,47228 -51628,63635 -19613,16409 -41225,28815 -64838,37221 36822,9604 67638,25213 92854,47225 24812,21610 48425,52025 70437,91247l330578 668363 -192503 0c-38822,0 -70041,-21213 -93653,-63235l-270947 -566303c-14006,-25215 -29216,-43225 -45622,-54034 -16409,-10803 -37222,-17206 -62034,-18809l0 287359 -151281 0 0 -288559 -111263 0 0 703581 -213716 0 0 -1540835 213716 0 0 673166 111263 0 0 -332981 151281 0 0 330581z">
-											</path>
-										</g>
-									</svg>
-								</span> <span class="hide-on-med-and-down">Karbo</span></a>
-						</li>
-					</ul>
-					<form class="header-search" action="javascript:handleSearch()">
-						<div class="input-field">
-							<input id="txt_search" type="search" tabindex="-1"
-								placeholder="Search by block height / hash, transaction hash, payment id, address">
-							<label id="btn_search" class="label-icon" for="txt_search"><i
-									class="material-icons">search</i></label>
-							<i class="material-icons" id="close_nav_search">close</i>
-						</div>
-					</form>
-					<ul class="right">
-						<li>
-							<a class="hot_link menu waves-effect waves-block waves-light translation-button"
-								data-page="home.html" href="#">
-								<i class="material-icons">explore</i>
-							</a>
-						</li>
-						<li>
-							<a class="hot_link menu waves-effect waves-block waves-light translation-button" 
-								data-page="nodes.html" href="#nodes">
-								<i class="material-icons">cloud</i>
-							</a>
-						</li>
-						<li>
-							<a class="hot_link menu waves-effect waves-block waves-light translation-button"
-								data-page="alt_blocks.html" href="#alt_blocks">
-								<i class="material-icons">call_split</i>
-							</a>
-						</li>
-						<li>
-							<a class="dropdown-trigger waves-effect waves-block waves-light translation-button"
-								href="#!" data-target="dropdown_tools">
-								<i class="material-icons">apps</i>
-							</a>
-						</li>
-						<li>
-							<a class="hot_link menu waves-effect waves-block waves-light translation-button"
-								data-page="settings.html" href="#settings">
-								<i class="material-icons">settings</i>
-							</a>
-						</li>
-						<li class="divider"></li>
-						<li>
-							<div class="switch switch-checkbox" style="margin-top: -2px;">
-								<label>
-									<input type="checkbox" id="switch_mode">
-									<span class="lever"></span>
-								</label>
-							</div>
-						</li>
-						<li class="divider"></li>
-						<li id="stats_updated"><i class="material-icons">notifications_none</i></li>
-					</ul>
-				</div>
-				<div style="clear: both">
-			</div>
-		</nav>
-	</div>
+    <div id="app" v-cloak>
+        <div class="app-shell">
+            <div class="app-main">
+                <header class="topbar">
+                    <div class="topbar-main">
+                        <a class="brand brand--top" :href="linkTo({ name: 'home' })" @click.prevent="goTo({ name: 'home' })">
+                            <span class="brand-mark">
+                                <svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" version="1.1" style="shape-rendering:geometricPrecision; text-rendering:geometricPrecision; image-rendering:optimizeQuality; fill-rule:evenodd; clip-rule:evenodd" viewBox="0 0 2500000 2500000" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true">
+                                    <g id="krb-logo">
+                                        <circle cx="1250000" cy="1250000" r="1214062" fill="#14B0FD" stroke="none"></circle>
+                                        <path fill="#ffed00" fill-rule="nonzero" stroke="none" d="M1251219 1162750c18009,-3203 34019,-10006 48025,-20412 14009,-10407 27215,-28016 39622,-52029l275750 -538290c10803,-18010 24012,-32419 39218,-43625 15210,-10806 33219,-16410 53232,-16410l174893 0 -343384 633144c-15209,26016 -32419,47228 -51628,63635 -19613,16409 -41225,28815 -64838,37221 36822,9604 67638,25213 92854,47225 24812,21610 48425,52025 70437,91247l330578 668363 -192503 0c-38822,0 -70041,-21213 -93653,-63235l-270947 -566303c-14006,-25215 -29216,-43225 -45622,-54034 -16409,-10803 -37222,-17206 -62034,-18809l0 287359 -151281 0 0 -288559 -111263 0 0 703581 -213716 0 0 -1540835 213716 0 0 673166 111263 0 0 -332981 151281 0 0 330581z"></path>
+                                    </g>
+                                </svg>
+                            </span>
+                            <span class="brand-copy">
+                                <span class="brand-title">Karbo Explorer</span>
+                            </span>
+                        </a>
 
-	<ul id="dropdown_tools" class="dropdown-content"
-		style="white-space: nowrap; position: absolute; top: 64px; opacity: 1; display: none;">
-		<li>
-			<a class="hot_link menu" data-page="pushtx.html" href="#pushtx">
-				Broadcast transaction
-			</a>
-		</li>
-		<li>
-			<a class="hot_link menu" data-page="check_funds.html" href="#check_funds">
-				Check balance proof
-			</a>
-		</li>
-		<li>
-			<a class="hot_link menu" data-page="check_payment.html" href="#check_payment">
-				Check payment
-			</a>
-		</li>
-		<li>
-			<a class="hot_link menu" data-page="paper_wallet.html" href="#paperwallet">
-				Paper Wallet
-			</a>
-		</li>
-		<li>
-			<a class="hot_link menu" data-page="validate_address.html" href="#validate_address">
-				Validate address
-			</a>
-		</li>
-		<li>
-			<a class="hot_link menu" data-page="verify_message.html" href="#verify_message">
-				Verify message
-			</a>
-		</li>
-		<li>
-			<a class="hot_link menu" data-page="amount_converter.html" href="#amount_converter">
-				Amount converter
-			</a>
-		</li>
-		<li>
-			<a class="hot_link menu" data-page="payment_id.html" href="#payment_id_gen">
-				Payment Id tools
-			</a>
-		</li>
-	</ul>
+                        <form class="searchbar searchbar--compact" @submit.prevent="submitSearch">
+                            <i class="fas fa-search searchbar-icon" aria-hidden="true"></i>
+                            <input v-model.trim="searchQuery" type="search" spellcheck="false" autocomplete="off" placeholder="Search by block height, block hash, tx hash, payment ID, or address">
+                            <button type="submit" class="searchbar-submit">Go</button>
+                        </form>
 
+                        <nav class="topbar-nav topbar-nav--inline" aria-label="Primary">
+                            <a v-for="item in primaryNav" :key="item.name" class="nav-link topbar-nav-link" :class="{ active: isPrimaryActive(item.name) }" :href="linkTo({ name: item.name })" @click.prevent="goTo({ name: item.name })">
+                                <i class="fas" :class="item.icon"></i>
+                                <span>{{ item.label }}</span>
+                            </a>
+                        </nav>
 
-	<li style="display:none;">
-		<a class="hot_link" data-page="blockchain_block.html" href="#blockchain_block">
-			Block
-		</a>
-	</li>
+                        <div class="topbar-actions">
+                            <button type="button" class="icon-button" @click="refreshCurrentView" title="Refresh current view">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                            <button type="button" class="icon-button" @click="toggleTheme" :title="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'">
+                                <i class="fas" :class="theme === 'dark' ? 'fa-sun' : 'fa-moon'"></i>
+                            </button>
+                        </div>
+                    </div>
 
-	<li style="display:none;">
-		<a class="hot_link" data-page="blockchain_block.html" href="#block">
-			Block
-		</a>
-	</li>
+                </header>
 
-	<li style="display:none;">
-		<a class="hot_link" data-page="blockchain_transaction.html" href="#blockchain_transaction">
-			Transaction
-		</a>
-	</li>
+                <main class="page-wrap">
+                    <section v-if="route.name === 'home'" class="page-section">
+                        <div class="metric-grid">
+                            <article class="metric-card">
+                                <span class="metric-label">Height</span>
+                                <strong>{{ stats ? formatNumber(stats.height) : '--' }}</strong>
+                                <span class="metric-meta">Last known {{ stats ? formatNumber(stats.last_known_block_index) : '--' }}</span>
+                            </article>
+                            <article class="metric-card">
+                                <span class="metric-label">Transactions</span>
+                                <strong>{{ stats ? formatNumber(stats.transactions_count) : '--' }}</strong>
+                                <span class="metric-meta">Chain-wide confirmed count</span>
+                            </article>
+                            <article class="metric-card">
+                                <span class="metric-label">Supply</span>
+                                <strong>{{ stats ? formatCoins(stats.already_generated_coins, 2) : '--' }}</strong>
+                                <span class="metric-meta">Already generated coins</span>
+                            </article>
+                            <article class="metric-card">
+                                <span class="metric-label">Difficulty</span>
+                                <strong>{{ stats ? formatDifficulty(stats.difficulty) : '--' }}</strong>
+                                <span class="metric-meta">Target interval {{ formatDuration(blockTargetInterval) }}</span>
+                            </article>
+                            <article class="metric-card">
+                                <span class="metric-label">Hashrate</span>
+                                <strong>{{ stats ? formatHashrate(stats.difficulty / blockTargetInterval) : '--' }}</strong>
+                                <span class="metric-meta">Based on current network difficulty</span>
+                            </article>
+                            <article class="metric-card">
+                                <span class="metric-label">Next reward</span>
+                                <strong>{{ stats ? formatCoins(stats.next_reward, 4) : '--' }}</strong>
+                                <span class="metric-meta">Projected base block reward</span>
+                            </article>
+                            <article class="metric-card">
+                                <span class="metric-label">Min fee</span>
+                                <strong>{{ stats ? formatCoins(stats.min_fee, 2) : '--' }}</strong>
+                                <span class="metric-meta">Network minimum fee</span>
+                            </article>
+                            <article class="metric-card metric-card--node">
+                                <span class="metric-label">Connected node</span>
+                                <strong>{{ nodeLabel(api) }}</strong>
+                                <div class="metric-node-status">
+                                    <span class="status-pill" :class="'is-' + statsStatus">
+                                        <span class="status-dot"></span>
+                                        {{ statsStatusText }}
+                                    </span>
+                                    <span class="metric-meta">{{ statsFreshnessText }}</span>
+                                </div>
+                            </article>
+                        </div>
 
-	<li style="display:none;">
-		<a class="hot_link" data-page="blockchain_transaction.html" href="#transaction">
-			Transaction
-		</a>
-	</li>
+                        <div class="hero-grid hero-grid--focus">
+                            <article class="hero-aside hero-chart-card hero-chart-card--feature">
+                                <div class="panel-header">
+                                    <div>
+                                        <p class="eyebrow">Network difficulty</p>
+                                        <h2>{{ difficultyChart ? 'Recent ' + difficultyChart.points.length + ' blocks' : 'Recent blocks' }}</h2>
+                                        <p class="panel-copy">Click any point to open that block and inspect its details.</p>
+                                    </div>
+                                    <div class="chart-summary" v-if="difficultyChart">
+                                        <strong>{{ formatDifficulty(difficultyChart.latest) }}</strong>
+                                        <span>Latest difficulty</span>
+                                    </div>
+                                </div>
+                                <div v-if="difficultyChart" class="chart-stat-strip">
+                                    <div class="chart-stat">
+                                        <span>Avg difficulty</span>
+                                        <strong>{{ formatDifficulty(difficultyChart.average) }}</strong>
+                                    </div>
+                                    <div class="chart-stat">
+                                        <span>Avg interval</span>
+                                        <strong>{{ formatDuration(difficultyChart.averageLapse) }}</strong>
+                                    </div>
+                                    <div class="chart-stat">
+                                        <span>Avg size</span>
+                                        <strong>{{ formatBytes(difficultyChart.averageSize) }}</strong>
+                                    </div>
+                                    <div class="chart-stat">
+                                        <span>Avg tx / block</span>
+                                        <strong>{{ formatNumber(Math.round(difficultyChart.averageTxCount * 10) / 10) }}</strong>
+                                    </div>
+                                </div>
+                                <div v-if="difficultyChart" class="difficulty-chart difficulty-chart--feature">
+                                    <div class="difficulty-chart-stage">
+                                        <canvas ref="difficultyCanvas" class="difficulty-chart-canvas" aria-label="Recent block difficulty chart"></canvas>
+                                    </div>
+                                    <div class="difficulty-chart-meta">
+                                        <span>Difficulty over time</span>
+                                        <span>H {{ formatNumber(difficultyChart.firstHeight) }}</span>
+                                        <span>H {{ formatNumber(difficultyChart.lastHeight) }}</span>
+                                    </div>
+                                </div>
+                                <div v-else class="state-card state-card--inline">
+                                    <p>Load recent blocks to draw the chart.</p>
+                                </div>
+                            </article>
+                        </div>
 
-	<li style="display:none;">
-		<a class="hot_link" data-page="blockchain_payment_id.html" href="#blockchain_payment_id">
-			Transactions by Payment ID
-		</a>
-	</li>
+                        <div class="panel-grid panel-grid--home">
+                            <article class="panel panel--wide">
+                                <div class="panel-header">
+                                    <div>
+                                        <p class="eyebrow">Transactions pool</p>
+                                        <h2>Pending mempool</h2>
+                                    </div>
+                                </div>
 
-	<li style="display:none;">
-		<a class="hot_link" data-page="blockchain_payment_id.html" href="#payment_id">
-			Transactions by Payment ID
-		</a>
-	</li>
+                                <div v-if="home.loading && !home.mempool.length" class="state-card">
+                                    <div class="spinner"></div>
+                                    <p>Loading mempool...</p>
+                                </div>
+                                <div v-else-if="!home.mempool.length" class="state-card">
+                                    <i class="fas fa-inbox"></i>
+                                    <p>No pending transactions.</p>
+                                </div>
+                                <div v-else class="table-shell">
+                                    <table class="data-table data-table--compact">
+                                        <thead>
+                                            <tr>
+                                                <th>Received</th>
+                                                <th>Amount</th>
+                                                <th>Fee</th>
+                                                <th>Size</th>
+                                                <th>Hash</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="tx in home.mempool" :key="tx.hash">
+                                                <td>
+                                                    <div class="stack">
+                                                        <strong>{{ formatDateTime(tx.receive_time) }}</strong>
+                                                        <span class="muted">{{ formatRelativeTime(tx.receive_time) }}</span>
+                                                    </div>
+                                                </td>
+                                                <td>{{ formatCoins(tx.amount_out, 4, false) }}</td>
+                                                <td>{{ formatCoins(tx.fee, 4, false) }}</td>
+                                                <td><span class="nowrap-value">{{ formatBytes(tx.size) }}</span></td>
+                                                <td>
+                                                    <a class="hash-string inline-link" :href="linkTo({ name: 'transaction', params: { hash: tx.hash } })" @click.prevent="goTo({ name: 'transaction', params: { hash: tx.hash } })">{{ tx.hash }}</a>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </article>
 
-	<li style="display:none;">
-		<a class="hot_link" data-page="address.html" href="#address">
-			Address
-		</a>
-	</li>
+                            <article class="panel panel--wide">
+                                <div class="panel-header">
+                                    <div>
+                                        <p class="eyebrow">Recent transactions</p>
+                                        <h2>Latest confirmed transactions</h2>
+                                    </div>
+                                </div>
 
-	<li style="display:none;">
-		<a class="hot_link" data-page="settings.html" href="#settings">
-			Settings
-		</a>
-	</li>
+                                <div v-if="home.recentTransactionsLoading && !home.recentTransactions.length" class="state-card">
+                                    <div class="spinner"></div>
+                                    <p>Loading recent transactions...</p>
+                                </div>
+                                <div v-else-if="home.recentTransactionsError && !home.recentTransactions.length" class="state-card state-card--error">
+                                    <i class="fas fa-triangle-exclamation"></i>
+                                    <p>{{ home.recentTransactionsError }}</p>
+                                </div>
+                                <div v-else-if="!home.recentTransactions.length" class="state-card">
+                                    <i class="fas fa-receipt"></i>
+                                    <p>No confirmed transactions in the current block window.</p>
+                                </div>
+                                <div v-else class="table-shell">
+                                    <table class="data-table data-table--compact">
+                                        <thead>
+                                            <tr>
+                                                <th>Confirmed</th>
+                                                <th>Amount</th>
+                                                <th>Fee</th>
+                                                <th>Size</th>
+                                                <th>Block</th>
+                                                <th>Hash</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="tx in home.recentTransactions" :key="tx.hash">
+                                                <td>
+                                                    <div class="stack">
+                                                        <strong>{{ formatDateTime(tx.timestamp) }}</strong>
+                                                        <span class="muted">{{ formatRelativeTime(tx.timestamp) }}</span>
+                                                    </div>
+                                                </td>
+                                                <td>{{ formatCoins(tx.totalOutputsAmount, 4, false) }}</td>
+                                                <td>{{ formatCoins(tx.fee, 4, false) }}</td>
+                                                <td><span class="nowrap-value">{{ formatBytes(tx.size) }}</span></td>
+                                                <td>
+                                                    <a class="inline-link" :href="linkTo({ name: 'block', params: { hash: String(tx.blockIndex) } })" @click.prevent="goTo({ name: 'block', params: { hash: String(tx.blockIndex) } })">#{{ formatNumber(tx.blockIndex) }}</a>
+                                                </td>
+                                                <td>
+                                                    <a class="hash-string inline-link" :href="linkTo({ name: 'transaction', params: { hash: tx.hash } })" @click.prevent="goTo({ name: 'transaction', params: { hash: tx.hash } })">{{ tx.hash }}</a>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </article>
 
-</header>
-<div id="content">
-	<div class="container">
+                            <article class="panel panel--wide">
+                                <div class="panel-header">
+                                    <div>
+                                        <p class="eyebrow">Recent blocks</p>
+                                        <h2>Latest chain activity</h2>
+                                    </div>
+                                    <div class="panel-actions">
+                                        <label class="inline-control">
+                                            <span>Rows</span>
+                                            <select v-model.number="home.pageSize" @change="reloadHome">
+                                                <option :value="20">20</option>
+                                                <option :value="50">50</option>
+                                                <option :value="100">100</option>
+                                            </select>
+                                        </label>
+                                        <label class="inline-control inline-control--input">
+                                            <span>Height</span>
+                                            <input v-model.trim="home.gotoHeight" type="number" min="0" placeholder="700000" @keydown.enter.prevent="goToHomeHeight">
+                                        </label>
+                                        <button type="button" class="button button--ghost button--small" @click="goToHomeHeight">
+                                            Go
+                                        </button>
+                                        <button type="button" class="button button--ghost button--small" @click="goToLatestBlocks" :disabled="!stats">Latest</button>
+                                        <button type="button" class="button button--ghost button--small" @click="goToNewerBlocks" :disabled="!home.hasNewer">Newer</button>
+                                        <button type="button" class="button button--ghost button--small" @click="goToOlderBlocks" :disabled="!home.hasOlder">Older</button>
+                                        <button type="button" class="button button--ghost button--small" @click="loadMoreBlocks" :disabled="!home.hasOlder || home.loadingMore">
+                                            {{ home.loadingMore ? 'Loading...' : '+ More' }}
+                                        </button>
+                                    </div>
+                                </div>
 
-		<a href="https://bank.gov.ua/en/news/all/natsionalniy-bank-vidkriv-spetsrahunok-dlya-zboru-koshtiv-na-potrebi-armiyi" class="em-ribbon" style="position: absolute; left:0; top:0; width: 90px; height: 90px; background: url('https://stfalcon.github.io/stopwar/img/stop-war-in-ukraine.png'); z-index: 2013; border: 0;" title="Do something to stop this war! Russians are killing our children and civilians!" target="_blank"></a>
+                                <div v-if="home.loading" class="state-card">
+                                    <div class="spinner"></div>
+                                    <p>Loading blocks...</p>
+                                </div>
+                                <div v-else-if="home.error" class="state-card state-card--error">
+                                    <i class="fas fa-triangle-exclamation"></i>
+                                    <p>{{ home.error }}</p>
+                                </div>
+                                <div v-else class="table-shell">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Height</th>
+                                                <th>Time</th>
+                                                <th>Interval</th>
+                                                <th>Hash</th>
+                                                <th>Size</th>
+                                                <th>Difficulty</th>
+                                                <th>Txs</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="block in home.blocks" :key="block.hash">
+                                                <td>
+                                                    <a class="inline-link inline-link--plain" :href="linkTo({ name: 'block', params: { hash: block.hash } })" @click.prevent="goTo({ name: 'block', params: { hash: block.hash } })">#{{ formatNumber(block.height) }}</a>
+                                                </td>
+                                                <td>
+                                                    <div class="stack">
+                                                        <strong>{{ formatDateTime(block.timestamp) }}</strong>
+                                                        <span class="muted">{{ formatRelativeTime(block.timestamp) }}</span>
+                                                    </div>
+                                                </td>
+                                                <td>{{ block.lapse ? formatDuration(block.lapse) : '--' }}</td>
+                                                <td>
+                                                    <a class="hash-string inline-link inline-link--plain" :href="linkTo({ name: 'block', params: { hash: block.hash } })" @click.prevent="goTo({ name: 'block', params: { hash: block.hash } })">{{ block.hash }}</a>
+                                                </td>
+                                                <td><span class="nowrap-value">{{ formatBytes(block.cumulative_size) }}</span></td>
+                                                <td>{{ formatDifficulty(block.difficulty) }}</td>
+                                                <td>{{ formatNumber(block.transactions_count) }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </article>
+                        </div>
+                    </section>
 
-		<div id="page"></div>
+                    <section v-else-if="route.name === 'block'" class="page-section">
+                        <div v-if="blockView.loading" class="state-card">
+                            <div class="spinner"></div>
+                            <p>Loading block...</p>
+                        </div>
+                        <div v-else-if="blockView.error" class="state-card state-card--error">
+                            <i class="fas fa-triangle-exclamation"></i>
+                            <p>{{ blockView.error }}</p>
+                        </div>
+                        <template v-else-if="blockView.block">
+                            <div class="page-head">
+                                <div>
+                                    <p class="eyebrow">Block detail</p>
+                                    <h1 class="page-title page-title--hash hash-string">{{ blockView.block.hash }}</h1>
+                                    <p class="page-subtitle">
+                                        Height #{{ formatNumber(blockView.block.index) }}
+                                        <span class="bullet">&middot;</span>
+                                        {{ blockView.block.isOrphaned ? 'Alternative chain block' : 'Main chain block' }}
+                                        <span class="bullet">&middot;</span>
+                                        {{ formatNumber(blockView.block.transactions.length) }} transactions
+                                    </p>
+                                </div>
+                                <div class="page-actions">
+                                    <button type="button" class="button button--ghost button--small" @click="goTo({ name: 'block', params: { hash: blockView.block.prevBlockHash } })" :disabled="!blockView.block.prevBlockHash">
+                                        <i class="fas fa-arrow-left"></i>
+                                        Previous
+                                    </button>
+                                    <button type="button" class="button button--ghost button--small" @click="goTo({ name: 'block', params: { hash: blockView.nextHash } })" :disabled="!blockView.nextHash">
+                                        Next
+                                        <i class="fas fa-arrow-right"></i>
+                                    </button>
+                                    <button type="button" class="button button--ghost button--small" @click="copyText(blockView.block.hash, 'Block hash copied')">
+                                        <i class="fas fa-copy"></i>
+                                        Copy
+                                    </button>
+                                </div>
+                            </div>
 
-		<p id="loading" class="center-align"><i class="fa fa-circle-o-notch fa-spin"></i></p>
+                            <div class="metric-grid metric-grid--compact">
+                                <article class="metric-card">
+                                    <span class="metric-label">Depth</span>
+                                    <strong>{{ blockDepth }}</strong>
+                                    <span class="metric-meta">Confirmations from the tip</span>
+                                </article>
+                                <article class="metric-card">
+                                    <span class="metric-label">Timestamp</span>
+                                    <strong>{{ formatDateTime(blockView.block.timestamp) }}</strong>
+                                    <span class="metric-meta">{{ formatRelativeTime(blockView.block.timestamp) }}</span>
+                                </article>
+                                <article class="metric-card">
+                                    <span class="metric-label">Reward</span>
+                                    <strong>{{ formatCoins(blockView.block.reward, 4) }}</strong>
+                                    <span class="metric-meta">Base + fees after penalty</span>
+                                </article>
+                                <article class="metric-card">
+                                    <span class="metric-label">Block size</span>
+                                    <strong>{{ formatBytes(blockView.block.blockSize) }}</strong>
+                                    <span class="metric-meta">Full serialized block size</span>
+                                </article>
+                                <article class="metric-card">
+                                    <span class="metric-label">Difficulty</span>
+                                    <strong>{{ formatDifficulty(blockView.block.difficulty) }}</strong>
+                                    <span class="metric-meta">Cumulative {{ formatDifficulty(blockView.block.cumulativeDifficulty) }}</span>
+                                </article>
+                                <article class="metric-card">
+                                    <span class="metric-label">Transactions</span>
+                                    <strong>{{ formatNumber(blockView.block.transactions.length) }}</strong>
+                                    <span class="metric-meta">Including miner transaction</span>
+                                </article>
+                            </div>
 
-	</div>
-</div>
+                            <div class="panel-grid">
+                                <article class="panel">
+                                    <div class="panel-header">
+                                        <div>
+                                            <p class="eyebrow">Header</p>
+                                            <h2>Chain context</h2>
+                                        </div>
+                                    </div>
+                                    <div class="detail-list">
+                                        <div class="detail-row">
+                                            <span>Previous hash</span>
+                                            <a class="hash-string inline-link" :href="linkTo({ name: 'block', params: { hash: blockView.block.prevBlockHash } })" @click.prevent="goTo({ name: 'block', params: { hash: blockView.block.prevBlockHash } })">{{ blockView.block.prevBlockHash }}</a>
+                                        </div>
+                                        <div class="detail-row"><span>Proof of work</span><strong class="hash-string">{{ blockView.block.proofOfWork }}</strong></div>
+                                        <div class="detail-row"><span>Version</span><strong>{{ blockView.block.majorVersion }}.{{ blockView.block.minorVersion }}</strong></div>
+                                        <div class="detail-row"><span>Nonce</span><strong>{{ formatNumber(blockView.block.nonce) }}</strong></div>
+                                        <div class="detail-row"><span>Orphaned</span><strong>{{ blockView.block.isOrphaned ? 'Yes' : 'No' }}</strong></div>
+                                        <div class="detail-row"><span>Total coins</span><strong>{{ formatCoins(blockView.block.alreadyGeneratedCoins, 2) }}</strong></div>
+                                        <div class="detail-row"><span>Total transactions</span><strong>{{ formatNumber(blockView.block.alreadyGeneratedTransactions) }}</strong></div>
+                                        <div class="detail-row">
+                                            <span>Signature</span>
+                                            <strong :class="hasDisplayableSignature(blockView.block.minerSignature) ? 'hash-string' : ''">{{ displayBlockSignature(blockView.block.minerSignature) }}</strong>
+                                        </div>
+                                    </div>
+                                </article>
 
-<footer class="light-blue darken-4 page-footer">
-	<div class="container">
-		<a class="scrollup btn-floating btn-large halfway-fab waves-effect waves-light light-blue darken-1"><i class="material-icons">keyboard_arrow_up</i></a>
-		<div class="row">
-			<div class="col l4 s12">
-				
-				<h5>Node info</h5>
+                                <article class="panel">
+                                    <div class="panel-header">
+                                        <div>
+                                            <p class="eyebrow">Economics</p>
+                                            <h2>Reward breakdown</h2>
+                                        </div>
+                                    </div>
+                                    <div class="detail-list">
+                                        <div class="detail-row"><span>Base reward</span><strong>{{ formatCoins(blockView.block.baseReward, 4) }}</strong></div>
+                                        <div class="detail-row"><span>Transactions fee</span><strong>{{ formatCoins(blockView.block.totalFeeAmount, 4) }}</strong></div>
+                                        <div class="detail-row"><span>Penalty</span><strong>{{ formatPercent(blockView.block.penalty) }}</strong></div>
+                                        <div class="detail-row"><span>Transactions size</span><strong>{{ formatBytes(blockView.block.transactionsCumulativeSize) }}</strong></div>
+                                        <div class="detail-row"><span>Median</span><strong>{{ formatBytes(blockView.block.sizeMedian) }}</strong></div>
+                                        <div class="detail-row"><span>Effective median</span><strong>{{ formatBytes(blockView.block.effectiveSizeMedian) }}</strong></div>
+                                    </div>
+                                </article>
+                            </div>
 
-				<ul class="text-info">
-					<li>URL: <span id="node_url">...</span></li>
-					<li>Status: <span id="node_connection" class="text-danger">Offline</span></li>
-					<li>Version: <span id="node_ver">...</span></li>
-					<li>Height: <span id="node_height">...</span></li>
-					<li>Last block: <span id="node_block">...</span></li>
-					<li>Difficulty: <span id="node_diff">...</span></li>
-					<li>Alt. blocks: <span id="node_alt">...</span></li>
-					<li>RPC connections: <span id="node_rpc">...</span></li>
-					<li>Incoming P2P connections: <span id="node_inc">...</span></li>
-					<li>Outgoing P2P connects: <span id="node_out">...</span></li>
-					<li>White peers: <span id="node_white">...</span></li>
-					<li>Grey peers: <span id="node_grey">...</span></li>
-				</ul>
+                            <article class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <p class="eyebrow">Transactions</p>
+                                        <h2>Block contents</h2>
+                                    </div>
+                                </div>
+                                <div class="table-shell">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>#</th>
+                                                <th>Hash</th>
+                                                <th>Fee</th>
+                                                <th>Total amount</th>
+                                                <th>Size</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="(transaction, index) in blockView.block.transactions" :key="transaction.hash">
+                                                <td>{{ index }}</td>
+                                                <td>
+                                                    <a class="hash-string inline-link" :href="linkTo({ name: 'transaction', params: { hash: transaction.hash } })" @click.prevent="goTo({ name: 'transaction', params: { hash: transaction.hash } })">{{ transaction.hash }}</a>
+                                                </td>
+                                                <td>{{ formatCoins(transaction.fee, 4, false) }}</td>
+                                                <td>{{ formatCoins(transaction.totalOutputsAmount, 4, false) }}</td>
+                                                <td>{{ formatBytes(transaction.size) }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </article>
+                        </template>
+                    </section>
 
+                    <section v-else-if="route.name === 'transaction'" class="page-section">
+                        <div v-if="txView.loading" class="state-card">
+                            <div class="spinner"></div>
+                            <p>Loading transaction...</p>
+                        </div>
+                        <div v-else-if="txView.error" class="state-card state-card--error">
+                            <i class="fas fa-triangle-exclamation"></i>
+                            <p>{{ txView.error }}</p>
+                        </div>
+                        <template v-else-if="txView.tx">
+                            <div class="page-head">
+                                <div>
+                                    <p class="eyebrow">Transaction detail</p>
+                                    <h1 class="page-title page-title--hash hash-string">{{ txView.tx.hash }}</h1>
+                                    <p class="page-subtitle">
+                                        <span class="status-pill" :class="txView.tx.inBlockchain ? 'is-online' : 'is-warning'">
+                                            <span class="status-dot"></span>
+                                            {{ txView.tx.inBlockchain ? 'Confirmed' : 'Unconfirmed' }}
+                                        </span>
+                                        <span class="bullet">&middot;</span>
+                                        {{ txView.tx.inBlockchain ? transactionConfirmations + ' confirmations' : 'Waiting for inclusion' }}
+                                    </p>
+                                </div>
+                                <div class="page-actions">
+                                    <button type="button" class="button button--ghost button--small" @click="copyText(txView.tx.hash, 'Transaction hash copied')">
+                                        <i class="fas fa-copy"></i>
+                                        Copy
+                                    </button>
+                                </div>
+                            </div>
 
-			</div>
-			<div class="col l4 s12">
-				<p>
-					<small>
-						<!-- This copyright should be left intact -->
-						Powered by <a target="_blank"
-							href="https://github.com/Karbovanets/Karbowanec-Blockchain-Explorer">
-							<i class="fab fa-github"></i> Karbowanec Blockchain Explorer</a>
-						v. 1.2.10 static<br />
-						<span class="text-muted">Partially based on <strong>cryptonote-universal-pool</strong><br />
-							open sourced under the <a href="http://www.gnu.org/licenses/gpl-2.0.html">GPL</a></span>
-					</small>
-				</p>
+                            <div class="metric-grid metric-grid--compact">
+                                <article class="metric-card">
+                                    <span class="metric-label">Block height</span>
+                                    <strong>{{ txView.tx.inBlockchain ? formatNumber(txView.tx.blockIndex) : 'Mempool' }}</strong>
+                                    <span class="metric-meta">{{ txView.tx.inBlockchain ? formatDateTime(txView.tx.timestamp) : 'No first confirmation yet' }}</span>
+                                </article>
+                                <article class="metric-card">
+                                    <span class="metric-label">Outputs sum</span>
+                                    <strong>{{ formatCoins(txView.tx.totalOutputsAmount, 4) }}</strong>
+                                    <span class="metric-meta">Visible outputs total</span>
+                                </article>
+                                <article class="metric-card">
+                                    <span class="metric-label">Fee</span>
+                                    <strong>{{ txFeeText }}</strong>
+                                    <span class="metric-meta">Miner compensation</span>
+                                </article>
+                                <article class="metric-card">
+                                    <span class="metric-label">Size</span>
+                                    <strong>{{ formatBytes(txView.tx.size) }}</strong>
+                                    <span class="metric-meta">Serialized transaction size</span>
+                                </article>
+                                <article class="metric-card">
+                                    <span class="metric-label">Mixin</span>
+                                    <strong>{{ txView.tx.mixin || '--' }}</strong>
+                                    <span class="metric-meta">Ring size indicator</span>
+                                </article>
+                                <article class="metric-card">
+                                    <span class="metric-label">Unlock time</span>
+                                    <strong>{{ formatNumber(txView.tx.unlockTime) }}</strong>
+                                    <span class="metric-meta">Spendable after unlock height/time</span>
+                                </article>
+                            </div>
 
-				<ul>
-					<li><a href="http://karbo.io/">karbo.io</a></li>
-					<li><a href="http://karbo.org/">karbo.org</a></li>
-				</ul>
+                            <div class="panel-grid">
+                                <article class="panel">
+                                    <div class="panel-header">
+                                        <div>
+                                            <p class="eyebrow">Overview</p>
+                                            <h2>Transaction metadata</h2>
+                                        </div>
+                                    </div>
+                                    <div class="detail-list">
+                                        <div class="detail-row" v-if="txView.tx.inBlockchain">
+                                            <span>Block hash</span>
+                                            <a class="hash-string inline-link" :href="linkTo({ name: 'block', params: { hash: txView.tx.blockHash } })" @click.prevent="goTo({ name: 'block', params: { hash: txView.tx.blockHash } })">{{ txView.tx.blockHash }}</a>
+                                        </div>
+                                        <div class="detail-row"><span>Version</span><strong>{{ txView.tx.version || '--' }}</strong></div>
+                                        <div class="detail-row"><span>Public key</span><strong class="hash-string">{{ txView.tx.extra && txView.tx.extra.publicKey ? txView.tx.extra.publicKey : '--' }}</strong></div>
+                                        <div class="detail-row"><span>Raw extra</span><strong class="hash-string">{{ txView.tx.extra && txView.tx.extra.raw ? txView.tx.extra.raw : '--' }}</strong></div>
+                                        <div class="detail-row" v-if="transactionPaymentId">
+                                            <span>Payment ID</span>
+                                            <a class="hash-string inline-link" :href="linkTo({ name: 'payment-id', params: { hash: transactionPaymentId } })" @click.prevent="goTo({ name: 'payment-id', params: { hash: transactionPaymentId } })">{{ transactionPaymentId }}</a>
+                                        </div>
+                                        <div class="detail-row" v-if="transactionDecodedPaymentId">
+                                            <span>Decoded payment ID</span>
+                                            <strong>{{ transactionDecodedPaymentId }}</strong>
+                                        </div>
+                                        <div class="detail-row" v-if="transactionExtraNonce">
+                                            <span>Extra nonce</span>
+                                            <strong class="hash-string">{{ transactionExtraNonce }}</strong>
+                                        </div>
+                                        <div class="detail-row" v-if="transactionDecodedExtraNonce">
+                                            <span>Decoded nonce</span>
+                                            <strong>{{ transactionDecodedExtraNonce }}</strong>
+                                        </div>
+                                    </div>
+                                </article>
 
-			</div>
-			<div class="col l4 s12">
+                                <article class="panel">
+                                    <div class="panel-header">
+                                        <div>
+                                            <p class="eyebrow">Verification</p>
+                                            <h2>Check transaction outputs</h2>
+                                        </div>
+                                    </div>
+                                    <form class="verification-form" @submit.prevent="verifyTransaction">
+                                        <label class="field">
+                                            <span>Verification mode</span>
+                                            <select v-model="txVerifier.keyType">
+                                                <option value="tx_key">Transaction key</option>
+                                                <option value="view_key">Private view key</option>
+                                                <option value="tx_proof">Proof of payment</option>
+                                            </select>
+                                        </label>
+                                        <label class="field">
+                                            <span>Key / proof</span>
+                                            <textarea v-model.trim="txVerifier.secret" rows="3" placeholder="Private view key, transaction key, or proof"></textarea>
+                                        </label>
+                                        <label class="field">
+                                            <span>Recipient address</span>
+                                            <input v-model.trim="txVerifier.address" type="text" placeholder="Karbo address">
+                                        </label>
+                                        <div class="panel-actions">
+                                            <button type="submit" class="button button--primary" :disabled="txVerifier.loading">
+                                                <i class="fas fa-key"></i>
+                                                {{ txVerifier.loading ? 'Checking...' : 'Check payment' }}
+                                            </button>
+                                            <button type="button" class="button button--ghost" @click="resetVerification">
+                                                Clear
+                                            </button>
+                                        </div>
+                                    </form>
 
-				<h5>Specification</h5>
-				<ul class="text-info">
-					<li>Ticker: KRB</li>
-					<li>Symbol: Ҝ &ndash; Ka with vertical stroke</li>
-					<li>Proof-of-Work algorithm: Signed yespower-blake256</li>
-					<li>Block time: 240 seconds</li>
-					<li>Difficulty: retarget each block</li>
-					<li>Divisible: up to 10<sup>12</sup> atomic units (up to 12 decimal places)</li>
-					<li>Emission: &infin;</li>
-					<li>initial supply: 10,000,000,000,000,000,000 atomic units, or 10&nbsp;million krb.</li>
-					<li>Tail emission: ~2% inflation p.a.</li>
-					<li>Block reward: slight change every block according to formula<br/>
-						<strong>R = max((S - A)/2<sup>18</sup>, (A / 100 * 2) / B)</strong><br/>
-						where 'S' initial supply and 'A' is already generated coins, 'B' est. nr of blocks p.a.
-					</li>
-				</ul>
+                                    <div v-if="txVerifier.error" class="notice notice--error">{{ txVerifier.error }}</div>
+                                    <div v-if="txVerifier.result" class="notice notice--success">
+                                        <strong>{{ txVerifier.result.signatureValid === false ? 'Invalid signature' : 'Received amount: ' + formatCoins(txVerifier.result.amount, 12) }}</strong>
+                                        <p v-if="txVerifier.result.signatureValid !== false">Matching outputs are highlighted in the Outputs tab.</p>
+                                    </div>
+                                </article>
+                            </div>
 
-			</div>
-		</div>
-	</div>
-	<div class="footer-copyright">
-		<div class="container">
-			&copy; 2017-2026 <strong>Karbo Developers</strong>
-		</div>
-	</div>
-</footer>
-<script>
-	$('.dropdown-trigger').dropdown({
-		inDuration: 300,
-		outDuration: 225,
-		hover: false, // Activate on hover
-		belowOrigin: true, // Displays dropdown below the button
-		alignment: 'right' // Displays dropdown with edge aligned to the left of button
-		}
-	);
+                            <div class="tab-strip">
+                                <button type="button" class="tab-button" :class="{ active: activeTxTab === 'inputs' }" @click="activeTxTab = 'inputs'">Inputs</button>
+                                <button type="button" class="tab-button" :class="{ active: activeTxTab === 'outputs' }" @click="activeTxTab = 'outputs'">Outputs</button>
+                                <button type="button" class="tab-button" :class="{ active: activeTxTab === 'signatures' }" @click="activeTxTab = 'signatures'">Signatures</button>
+                            </div>
 
-	$('#close_nav_search').hide();
-	$('#close_nav_search').click(function () {
-		$('#txt_search').val("");
-	});
-	$('#txt_search').focus(function () {
-		$('#close_nav_search').show();
-	});
-	$('#txt_search').blur(function () {
-		setTimeout(function () {
-			$('#close_nav_search').hide();
-		}, 300)
-	});
-</script>
+                            <article v-if="activeTxTab === 'inputs'" class="panel">
+                                <div class="table-shell">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Amount</th>
+                                                <th>Key image</th>
+                                                <th>Output indexes</th>
+                                                <th>Type</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="(input, index) in txView.tx.inputs" :key="input.type + '-' + index">
+                                                <template v-if="input.type !== 'ff'">
+                                                    <td>{{ formatCoins(input.data.input.amount, 4) }}</td>
+                                                    <td><span class="hash-string">{{ input.data.input.k_image }}</span></td>
+                                                    <td>
+                                                        <span v-for="(offset, offsetIndex) in input.data.input.key_offsets" :key="offset + '-' + offsetIndex">
+                                                            <a class="inline-link" :href="linkTo({ name: 'transaction', params: { hash: input.data.outputs[offsetIndex].transactionHash }, query: { highlight: input.data.outputs[offsetIndex].number } })" @click.prevent="goTo({ name: 'transaction', params: { hash: input.data.outputs[offsetIndex].transactionHash }, query: { highlight: input.data.outputs[offsetIndex].number } })">{{ offset }}</a><span v-if="offsetIndex < input.data.input.key_offsets.length - 1"> &middot; </span>
+                                                        </span>
+                                                    </td>
+                                                    <td>{{ input.type }}</td>
+                                                </template>
+                                                <template v-else>
+                                                    <td>{{ formatCoins(input.data.amount, 4) }}</td>
+                                                    <td colspan="2">Coinbase</td>
+                                                    <td>{{ input.type }}</td>
+                                                </template>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </article>
+
+                            <article v-if="activeTxTab === 'outputs'" class="panel">
+                                <div class="table-shell">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Amount</th>
+                                                <th>Public key</th>
+                                                <th>Index</th>
+                                                <th>Type</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="(output, index) in txView.tx.outputs" :key="output.output.target.data.key + '-' + index" :class="{ 'row-highlight': isOutputHighlighted(output, index) }">
+                                                <td>{{ formatCoins(output.output.amount, 4) }}</td>
+                                                <td><span class="hash-string">{{ output.output.target.data.key }}</span></td>
+                                                <td>{{ formatNumber(output.globalIndex) }}</td>
+                                                <td>{{ output.output.target.type }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </article>
+
+                            <article v-if="activeTxTab === 'signatures'" class="panel">
+                                <div class="table-shell">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>#</th>
+                                                <th>Signature</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="signature in txView.tx.signatures" :key="signature.first + '-' + signature.second">
+                                                <td>{{ signature.first }}</td>
+                                                <td><span class="hash-string">{{ signature.second }}</span></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </article>
+                        </template>
+                    </section>
+
+                    <section v-else-if="route.name === 'payment-id'" class="page-section">
+                        <div class="page-head">
+                            <div>
+                                <p class="eyebrow">Payment ID</p>
+                                <h1 class="page-title hash-string">{{ route.params.hash }}</h1>
+                                <p class="page-subtitle">Transactions found for this payment identifier.</p>
+                            </div>
+                        </div>
+
+                        <div v-if="paymentView.loading" class="state-card">
+                            <div class="spinner"></div>
+                            <p>Loading transactions...</p>
+                        </div>
+                        <div v-else-if="paymentView.error" class="state-card state-card--error">
+                            <i class="fas fa-triangle-exclamation"></i>
+                            <p>{{ paymentView.error }}</p>
+                        </div>
+                        <article v-else class="panel">
+                            <div v-if="!paymentView.txs.length" class="state-card">
+                                <i class="fas fa-inbox"></i>
+                                <p>No transactions found for this payment ID.</p>
+                            </div>
+                            <div v-else class="table-shell">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Hash</th>
+                                            <th>Fee</th>
+                                            <th>Total amount</th>
+                                            <th>Size</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="transaction in paymentView.txs" :key="transaction.hash">
+                                            <td>
+                                                <a class="hash-string inline-link" :href="linkTo({ name: 'transaction', params: { hash: transaction.hash } })" @click.prevent="goTo({ name: 'transaction', params: { hash: transaction.hash } })">{{ transaction.hash }}</a>
+                                            </td>
+                                            <td>{{ formatCoins(transaction.fee, 4, false) }}</td>
+                                            <td>{{ formatCoins(transaction.amount_out || transaction.totalOutputsAmount, 4, false) }}</td>
+                                            <td>{{ formatBytes(transaction.size) }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </article>
+                    </section>
+
+                    <section v-else-if="route.name === 'address'" class="page-section">
+                        <div class="page-head">
+                            <div>
+                                <p class="eyebrow">Address</p>
+                                <h1 class="page-title hash-string">{{ route.params.address }}</h1>
+                                <p class="page-subtitle">Address validation and public-key inspection.</p>
+                            </div>
+                            <div class="page-actions">
+                                <button type="button" class="button button--ghost button--small" @click="copyText(route.params.address, 'Address copied')">
+                                    <i class="fas fa-copy"></i>
+                                    Copy
+                                </button>
+                            </div>
+                        </div>
+
+                        <div v-if="addressView.loading" class="state-card">
+                            <div class="spinner"></div>
+                            <p>Validating address...</p>
+                        </div>
+                        <div v-else-if="addressView.error" class="state-card state-card--error">
+                            <i class="fas fa-triangle-exclamation"></i>
+                            <p>{{ addressView.error }}</p>
+                        </div>
+                        <div v-else class="panel-grid">
+                            <article class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <p class="eyebrow">Validation</p>
+                                        <h2>Address status</h2>
+                                    </div>
+                                </div>
+                                <div class="notice" :class="addressView.result && addressView.result.isValid ? 'notice--success' : 'notice--error'">
+                                    <strong>{{ addressView.result && addressView.result.isValid ? 'Address is valid' : 'Address is invalid' }}</strong>
+                                    <p v-if="addressView.result && addressView.result.isValid">View and spend public keys are available below.</p>
+                                </div>
+                                <div v-if="addressView.result && addressView.result.isValid" class="detail-list">
+                                    <div class="detail-row"><span>View public key</span><strong class="hash-string">{{ addressView.result.viewPublicKey }}</strong></div>
+                                    <div class="detail-row"><span>Spend public key</span><strong class="hash-string">{{ addressView.result.spendPublicKey }}</strong></div>
+                                </div>
+                            </article>
+
+                            <article class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <p class="eyebrow">Privacy note</p>
+                                        <h2>Why balances stay hidden</h2>
+                                    </div>
+                                </div>
+                                <p class="panel-copy">This explorer cannot show a Karbo address balance or its full history. CryptoNote privacy relies on one-time destination keys and ring signatures, so observers cannot map funds back to a public address the way they can on transparent chains.</p>
+                            </article>
+                        </div>
+                    </section>
+
+                    <section v-else-if="route.name === 'nodes'" class="page-section">
+                        <div class="page-head">
+                            <div>
+                                <p class="eyebrow">Node monitor</p>
+                                <h1 class="page-title">Public network nodes</h1>
+                                <p class="page-subtitle">Live node health and common chain data from the published HTTPS list.</p>
+                            </div>
+                        </div>
+
+                        <div v-if="nodesView.loading" class="state-card">
+                            <div class="spinner"></div>
+                            <p>Loading nodes...</p>
+                        </div>
+                        <div v-else-if="nodesView.error" class="state-card state-card--error">
+                            <i class="fas fa-triangle-exclamation"></i>
+                            <p>{{ nodesView.error }}</p>
+                        </div>
+                        <template v-else>
+                            <div class="metric-grid metric-grid--compact">
+                                <article class="metric-card">
+                                    <span class="metric-label">Live nodes</span>
+                                    <strong>{{ nodesView.summary ? formatNumber(nodesView.summary.onlineCount) : '--' }}</strong>
+                                    <span class="metric-meta">{{ nodesView.summary ? formatNumber(nodesView.summary.totalCount) + ' listed' : '--' }}</span>
+                                </article>
+                                <article class="metric-card">
+                                    <span class="metric-label">Common height</span>
+                                    <strong>{{ nodesView.summary ? formatNumber(nodesView.summary.commonHeight) : '--' }}</strong>
+                                    <span class="metric-meta">{{ nodesView.summary && nodesView.summary.onlineCount ? formatNumber(nodesView.summary.commonHeightCount) + ' / ' + formatNumber(nodesView.summary.onlineCount) + ' live nodes' : 'No live nodes' }}</span>
+                                </article>
+                                <article class="metric-card metric-card--span-3">
+                                    <span class="metric-label">Common hash</span>
+                                    <strong class="hash-string">{{ nodesView.summary ? nodesView.summary.commonHash : '--' }}</strong>
+                                    <span class="metric-meta">{{ nodesView.summary && nodesView.summary.onlineCount ? formatNumber(nodesView.summary.commonHashCount) + ' / ' + formatNumber(nodesView.summary.onlineCount) + ' live nodes' : 'No live nodes' }}</span>
+                                </article>
+                                <article class="metric-card">
+                                    <span class="metric-label">Common difficulty</span>
+                                    <strong>{{ nodesView.summary ? formatDifficulty(nodesView.summary.commonDifficulty) : '--' }}</strong>
+                                    <span class="metric-meta">{{ nodesView.summary && nodesView.summary.onlineCount ? formatNumber(nodesView.summary.commonDifficultyCount) + ' / ' + formatNumber(nodesView.summary.onlineCount) + ' live nodes' : 'No live nodes' }}</span>
+                                </article>
+                            </div>
+
+                            <div class="node-grid">
+                                <article v-for="node in nodesView.items" :key="node.url" class="panel node-card" :class="{ offline: !node.online }">
+                                    <div class="node-card-head">
+                                        <div>
+                                            <p class="eyebrow">{{ node.name }}</p>
+                                            <a class="inline-link" :href="node.url + '/getinfo'" target="_blank" rel="noreferrer">{{ node.url }}</a>
+                                        </div>
+                                        <span class="status-pill" :class="node.online ? 'is-online' : 'is-offline'">
+                                            <span class="status-dot"></span>
+                                            {{ node.online ? 'Online' : 'Offline' }}
+                                        </span>
+                                    </div>
+
+                                    <div v-if="node.online" class="detail-list">
+                                        <div class="detail-row"><span>Height</span><strong>{{ formatNumber(node.height) }}</strong></div>
+                                        <div class="detail-row"><span>Known height</span><strong>{{ formatNumber(node.lastKnownBlockIndex) }}</strong></div>
+                                        <div class="detail-row"><span>Top hash</span><strong class="hash-string">{{ node.topBlockHash || '--' }}</strong></div>
+                                        <div class="detail-row"><span>Difficulty</span><strong>{{ formatDifficulty(node.difficulty) }}</strong></div>
+                                        <div class="detail-row"><span>Alt blocks</span><strong>{{ formatNumber(node.altBlocksCount) }}</strong></div>
+                                        <div class="detail-row"><span>RPC / IN / OUT</span><strong>{{ formatNumber(node.rpcConnectionsCount) }} / {{ formatNumber(node.incomingConnectionsCount) }} / {{ formatNumber(node.outgoingConnectionsCount) }}</strong></div>
+                                        <div class="detail-row"><span>Version</span><strong>{{ node.version || '--' }}</strong></div>
+                                        <div class="detail-row"><span>Start time</span><strong>{{ node.startTime ? formatDateTime(node.startTime) : '--' }}</strong></div>
+                                        <div class="detail-row"><span>Uptime</span><strong>{{ node.startTime ? formatDuration(Math.max(nowSeconds - node.startTime, 0)) : '--' }}</strong></div>
+                                        <div class="detail-row"><span>Fee</span><strong>{{ node.feeText || 'free' }}</strong></div>
+                                    </div>
+                                    <p v-else class="panel-copy">This node did not respond to `getinfo` during the last refresh.</p>
+                                </article>
+                            </div>
+                        </template>
+                    </section>
+
+                    <section v-else-if="route.name === 'alt-blocks'" class="page-section">
+                        <div class="page-head">
+                            <div>
+                                <p class="eyebrow">Alternative blocks</p>
+                                <h1 class="page-title">Competing chain tips</h1>
+                                <p class="page-subtitle">Alternative blocks currently visible from the connected node.</p>
+                            </div>
+                        </div>
+
+                        <div v-if="altView.loading" class="state-card">
+                            <div class="spinner"></div>
+                            <p>Loading alt blocks...</p>
+                        </div>
+                        <div v-else-if="altView.error" class="state-card state-card--error">
+                            <i class="fas fa-triangle-exclamation"></i>
+                            <p>{{ altView.error }}</p>
+                        </div>
+                        <article v-else class="panel">
+                            <div v-if="!altView.items.length" class="state-card">
+                                <i class="fas fa-check-circle"></i>
+                                <p>No alternative blocks reported by this node.</p>
+                            </div>
+                            <div v-else class="table-shell">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Height</th>
+                                            <th>Time</th>
+                                            <th>Hash</th>
+                                            <th>Size</th>
+                                            <th>Difficulty</th>
+                                            <th>Txs</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="block in altView.items" :key="block.hash">
+                                            <td>{{ formatNumber(block.height) }}</td>
+                                            <td>
+                                                <div class="stack">
+                                                    <strong>{{ formatDateTime(block.timestamp) }}</strong>
+                                                    <span class="muted">{{ formatRelativeTime(block.timestamp) }}</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <a class="hash-string inline-link" :href="linkTo({ name: 'block', params: { hash: block.hash } })" @click.prevent="goTo({ name: 'block', params: { hash: block.hash } })">{{ block.hash }}</a>
+                                            </td>
+                                            <td><span class="nowrap-value">{{ formatBytes(block.cumulative_size) }}</span></td>
+                                            <td>{{ formatDifficulty(block.difficulty) }}</td>
+                                            <td>{{ formatNumber(block.transactions_count) }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </article>
+                    </section>
+
+                    <section v-else-if="route.name === 'tools'" class="page-section">
+                        <div class="page-head">
+                            <div>
+                                <p class="eyebrow">Tools</p>
+                                <h1 class="page-title">Explorer utilities</h1>
+                                <p class="page-subtitle">Broadcast transactions, verify proofs, validate addresses, convert amounts, and generate payment IDs from one place.</p>
+                            </div>
+                        </div>
+
+                        <div class="tool-grid">
+                            <article v-for="tool in toolCards" :key="tool.name" class="panel tool-card">
+                                <div class="panel-header">
+                                    <div>
+                                        <p class="eyebrow">{{ tool.label }}</p>
+                                        <h2>{{ tool.description }}</h2>
+                                    </div>
+                                    <i class="fas tool-card-icon" :class="tool.icon"></i>
+                                </div>
+                                <div class="panel-actions">
+                                    <button type="button" class="button button--ghost button--small" @click="goTo({ name: tool.name })">
+                                        Open
+                                    </button>
+                                </div>
+                            </article>
+                        </div>
+                    </section>
+
+                    <section v-else-if="route.name === 'broadcast-transaction'" class="page-section">
+                        <div class="page-head">
+                            <div>
+                                <p class="eyebrow">Tools</p>
+                                <h1 class="page-title">Broadcast transaction</h1>
+                                <p class="page-subtitle">Paste raw transaction hex and submit it to the connected node.</p>
+                            </div>
+                        </div>
+
+                        <article class="panel">
+                            <form class="verification-form" @submit.prevent="broadcastTransactionTool">
+                                <label class="field">
+                                    <span>Transaction hex</span>
+                                    <textarea v-model.trim="broadcastTool.txHex" rows="8" placeholder="Paste raw transaction hex"></textarea>
+                                </label>
+                                <div class="panel-actions">
+                                    <button type="submit" class="button button--primary" :disabled="broadcastTool.loading">
+                                        <i class="fas fa-paper-plane"></i>
+                                        {{ broadcastTool.loading ? 'Broadcasting...' : 'Broadcast' }}
+                                    </button>
+                                </div>
+                            </form>
+                            <div v-if="broadcastTool.error" class="notice notice--error">{{ broadcastTool.error }}</div>
+                            <div v-if="broadcastTool.success" class="notice notice--success">{{ broadcastTool.success }}</div>
+                        </article>
+                    </section>
+
+                    <section v-else-if="route.name === 'check-funds'" class="page-section">
+                        <div class="page-head">
+                            <div>
+                                <p class="eyebrow">Tools</p>
+                                <h1 class="page-title">Check reserve proof</h1>
+                                <p class="page-subtitle">Verify a reserve proof against an address, message, and optional blockchain height.</p>
+                            </div>
+                        </div>
+
+                        <article class="panel">
+                            <form class="verification-form" @submit.prevent="checkReserveProofTool">
+                                <label class="field">
+                                    <span>Address</span>
+                                    <input v-model.trim="reserveTool.address" type="text" placeholder="Karbo address">
+                                </label>
+                                <label class="field">
+                                    <span>Message</span>
+                                    <textarea v-model.trim="reserveTool.message" rows="3" placeholder="Optional challenge string"></textarea>
+                                </label>
+                                <label class="field">
+                                    <span>Signature</span>
+                                    <textarea v-model.trim="reserveTool.signature" rows="5" placeholder="Reserve proof signature"></textarea>
+                                </label>
+                                <label class="field">
+                                    <span>As of height</span>
+                                    <input v-model.trim="reserveTool.height" type="number" min="0" placeholder="Optional block height">
+                                </label>
+                                <div class="panel-actions">
+                                    <button type="submit" class="button button--primary" :disabled="reserveTool.loading">
+                                        <i class="fas fa-check"></i>
+                                        {{ reserveTool.loading ? 'Checking...' : 'Verify proof' }}
+                                    </button>
+                                </div>
+                            </form>
+                            <div v-if="reserveTool.error" class="notice notice--error">{{ reserveTool.error }}</div>
+                            <div v-if="reserveTool.result" class="notice" :class="reserveTool.result.good ? 'notice--success' : 'notice--error'">
+                                <strong>{{ reserveTool.result.good ? 'Proof is valid' : 'Proof is invalid' }}</strong>
+                                <p v-if="reserveTool.result.good">As of height {{ formatNumber(reserveTool.result.height) }}, total proven funds: {{ formatCoins(reserveTool.result.total, 12) }}, spent: {{ formatCoins(reserveTool.result.spent, 12) }}.</p>
+                            </div>
+                        </article>
+                    </section>
+
+                    <section v-else-if="route.name === 'check-payment'" class="page-section">
+                        <div class="page-head">
+                            <div>
+                                <p class="eyebrow">Tools</p>
+                                <h1 class="page-title">Check payment</h1>
+                                <p class="page-subtitle">Verify whether a transaction paid a given address using a tx key, private view key, or payment proof.</p>
+                            </div>
+                        </div>
+
+                        <article class="panel">
+                            <form class="verification-form" @submit.prevent="checkPaymentToolSubmit">
+                                <label class="field">
+                                    <span>Transaction hash</span>
+                                    <input v-model.trim="paymentCheckTool.txHash" type="text" placeholder="64-char transaction hash">
+                                </label>
+                                <label class="field">
+                                    <span>Verification mode</span>
+                                    <select v-model="paymentCheckTool.keyType">
+                                        <option value="tx_key">Transaction key</option>
+                                        <option value="view_key">Private view key</option>
+                                        <option value="tx_proof">Proof of payment</option>
+                                    </select>
+                                </label>
+                                <label class="field">
+                                    <span>Key / proof</span>
+                                    <textarea v-model.trim="paymentCheckTool.secret" rows="4" placeholder="Private view key, transaction key, or proof"></textarea>
+                                </label>
+                                <label class="field">
+                                    <span>Recipient address</span>
+                                    <input v-model.trim="paymentCheckTool.address" type="text" placeholder="Karbo address">
+                                </label>
+                                <div class="panel-actions">
+                                    <button type="submit" class="button button--primary" :disabled="paymentCheckTool.loading">
+                                        <i class="fas fa-key"></i>
+                                        {{ paymentCheckTool.loading ? 'Checking...' : 'Check payment' }}
+                                    </button>
+                                    <button v-if="paymentCheckTool.txInfo" type="button" class="button button--ghost" @click="goTo({ name: 'transaction', params: { hash: paymentCheckTool.txInfo.hash } })">
+                                        Open transaction
+                                    </button>
+                                </div>
+                            </form>
+                            <div v-if="paymentCheckTool.error" class="notice notice--error">{{ paymentCheckTool.error }}</div>
+                            <div v-if="paymentCheckTool.result" class="notice" :class="paymentCheckTool.result.signatureValid === false ? 'notice--error' : 'notice--success'">
+                                <strong>{{ paymentCheckTool.result.signatureValid === false ? 'Invalid signature' : 'Received amount: ' + formatCoins(paymentCheckTool.result.amount, 12) }}</strong>
+                                <p v-if="paymentCheckTool.result.signatureValid !== false">{{ formatNumber(paymentCheckTool.result.outputs.length) }} matching outputs found.</p>
+                            </div>
+                        </article>
+                    </section>
+
+                    <section v-else-if="route.name === 'validate-address'" class="page-section">
+                        <div class="page-head">
+                            <div>
+                                <p class="eyebrow">Tools</p>
+                                <h1 class="page-title">Validate address</h1>
+                                <p class="page-subtitle">Check whether an address is valid and inspect its public keys.</p>
+                            </div>
+                        </div>
+
+                        <article class="panel">
+                            <form class="verification-form" @submit.prevent="validateAddressToolSubmit">
+                                <label class="field">
+                                    <span>Address</span>
+                                    <input v-model.trim="validateTool.address" type="text" placeholder="Karbo address">
+                                </label>
+                                <div class="panel-actions">
+                                    <button type="submit" class="button button--primary" :disabled="validateTool.loading">
+                                        <i class="fas fa-check-circle"></i>
+                                        {{ validateTool.loading ? 'Validating...' : 'Validate' }}
+                                    </button>
+                                </div>
+                            </form>
+                            <div v-if="validateTool.error" class="notice notice--error">{{ validateTool.error }}</div>
+                            <div v-if="validateTool.result" class="notice" :class="validateTool.result.isValid ? 'notice--success' : 'notice--error'">
+                                <strong>{{ validateTool.result.isValid ? 'Address is valid' : 'Address is invalid' }}</strong>
+                            </div>
+                            <div v-if="validateTool.result && validateTool.result.isValid" class="detail-list">
+                                <div class="detail-row"><span>View public key</span><strong class="hash-string">{{ validateTool.result.viewPublicKey }}</strong></div>
+                                <div class="detail-row"><span>Spend public key</span><strong class="hash-string">{{ validateTool.result.spendPublicKey }}</strong></div>
+                            </div>
+                        </article>
+                    </section>
+
+                    <section v-else-if="route.name === 'verify-message'" class="page-section">
+                        <div class="page-head">
+                            <div>
+                                <p class="eyebrow">Tools</p>
+                                <h1 class="page-title">Verify signed message</h1>
+                                <p class="page-subtitle">Verify whether a message signature matches the supplied address.</p>
+                            </div>
+                        </div>
+
+                        <article class="panel">
+                            <form class="verification-form" @submit.prevent="verifyMessageToolSubmit">
+                                <label class="field">
+                                    <span>Address</span>
+                                    <input v-model.trim="verifyMessageTool.address" type="text" placeholder="Karbo address">
+                                </label>
+                                <label class="field">
+                                    <span>Signature</span>
+                                    <input v-model.trim="verifyMessageTool.signature" type="text" placeholder="SigV1...">
+                                </label>
+                                <label class="field">
+                                    <span>Message</span>
+                                    <textarea v-model.trim="verifyMessageTool.message" rows="4" placeholder="Signed message"></textarea>
+                                </label>
+                                <div class="panel-actions">
+                                    <button type="submit" class="button button--primary" :disabled="verifyMessageTool.loading">
+                                        <i class="fas fa-check"></i>
+                                        {{ verifyMessageTool.loading ? 'Verifying...' : 'Verify message' }}
+                                    </button>
+                                </div>
+                            </form>
+                            <div v-if="verifyMessageTool.error" class="notice notice--error">{{ verifyMessageTool.error }}</div>
+                            <div v-if="verifyMessageTool.result" class="notice" :class="verifyMessageTool.result.sigValid ? 'notice--success' : 'notice--error'">
+                                <strong>{{ verifyMessageTool.result.sigValid ? 'Signature is valid' : 'Signature is invalid' }}</strong>
+                            </div>
+                        </article>
+                    </section>
+
+                    <section v-else-if="route.name === 'amount-converter'" class="page-section">
+                        <div class="page-head">
+                            <div>
+                                <p class="eyebrow">Tools</p>
+                                <h1 class="page-title">Amount converter</h1>
+                                <p class="page-subtitle">Convert between atomic units and human-readable KRB values.</p>
+                            </div>
+                        </div>
+
+                        <div class="panel-grid">
+                            <article class="panel">
+                                <label class="field">
+                                    <span>Atomic units</span>
+                                    <input v-model.trim="amountTool.atomic" type="text" placeholder="1000000000000">
+                                </label>
+                                <div class="panel-actions">
+                                    <button type="button" class="button button--primary" @click="convertAtomicToHuman">
+                                        Atomic to KRB
+                                    </button>
+                                </div>
+                            </article>
+                            <article class="panel">
+                                <label class="field">
+                                    <span>Human-readable amount</span>
+                                    <input v-model.trim="amountTool.human" type="text" placeholder="1.0">
+                                </label>
+                                <div class="panel-actions">
+                                    <button type="button" class="button button--primary" @click="convertHumanToAtomic">
+                                        KRB to atomic
+                                    </button>
+                                </div>
+                            </article>
+                        </div>
+                    </section>
+
+                    <section v-else-if="route.name === 'payment-id-tools'" class="page-section">
+                        <div class="page-head">
+                            <div>
+                                <p class="eyebrow">Tools</p>
+                                <h1 class="page-title">Payment ID tools</h1>
+                                <p class="page-subtitle">Generate a payment ID, decode one to text, or encode a short ASCII memo into one.</p>
+                            </div>
+                        </div>
+
+                        <article class="panel">
+                            <div class="verification-form">
+                                <label class="field">
+                                    <span>Payment ID</span>
+                                    <input v-model.trim="paymentIdTool.paymentId" type="text" maxlength="64" placeholder="64-char payment ID">
+                                </label>
+                                <div class="panel-actions">
+                                    <button type="button" class="button button--primary" @click="generatePaymentId">
+                                        Generate
+                                    </button>
+                                    <button type="button" class="button button--ghost" @click="decodePaymentId">
+                                        Decode
+                                    </button>
+                                </div>
+                                <label class="field">
+                                    <span>ASCII memo</span>
+                                    <input v-model.trim="paymentIdTool.memo" type="text" maxlength="32" placeholder="Optional short memo">
+                                </label>
+                                <div class="panel-actions">
+                                    <button type="button" class="button button--ghost" @click="encodePaymentIdMemo">
+                                        Encode memo
+                                    </button>
+                                </div>
+                            </div>
+                        </article>
+                    </section>
+
+                    <section v-else-if="route.name === 'paper-wallet'" class="page-section">
+                        <div class="page-head">
+                            <div>
+                                <p class="eyebrow">Tools</p>
+                                <h1 class="page-title">Paper wallet</h1>
+                                <p class="page-subtitle">Generate a fresh wallet locally in your browser for offline storage.</p>
+                            </div>
+                            <div class="page-actions">
+                                <button type="button" class="button button--primary" @click="generatePaperWallet" :disabled="paperWallet.loading">
+                                    <i class="fas fa-wallet"></i>
+                                    {{ paperWallet.loading ? 'Generating...' : 'Generate wallet' }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div v-if="paperWallet.error" class="notice notice--error">{{ paperWallet.error }}</div>
+                        <div v-if="paperWallet.loading" class="state-card">
+                            <div class="spinner"></div>
+                            <p>Generating paper wallet...</p>
+                        </div>
+                        <div v-else-if="paperWallet.wallet" class="panel-grid">
+                            <article class="panel">
+                                <div class="detail-list">
+                                    <div class="detail-row"><span>Address</span><strong class="hash-string">{{ paperWallet.wallet.address }}</strong></div>
+                                    <div class="detail-row"><span>Mnemonic seed</span><strong>{{ paperWallet.wallet.mnemonic }}</strong></div>
+                                    <div class="detail-row"><span>Legacy GUI keys</span><strong class="hash-string">{{ paperWallet.wallet.privateKeys }}</strong></div>
+                                </div>
+                            </article>
+                            <article class="panel">
+                                <div class="detail-list">
+                                    <div class="detail-row"><span>View public</span><strong class="hash-string">{{ paperWallet.wallet.view.pub }}</strong></div>
+                                    <div class="detail-row"><span>View secret</span><strong class="hash-string">{{ paperWallet.wallet.view.sec }}</strong></div>
+                                    <div class="detail-row"><span>Spend public</span><strong class="hash-string">{{ paperWallet.wallet.spend.pub }}</strong></div>
+                                    <div class="detail-row"><span>Spend secret</span><strong class="hash-string">{{ paperWallet.wallet.spend.sec }}</strong></div>
+                                </div>
+                            </article>
+                        </div>
+                    </section>
+
+                    <section v-else-if="route.name === 'settings'" class="page-section">
+                        <div class="page-head">
+                            <div>
+                                <p class="eyebrow">Settings</p>
+                                <h1 class="page-title">Appearance and node preferences</h1>
+                                <p class="page-subtitle">Choose a theme, switch your RPC endpoint, and keep explorer routing predictable.</p>
+                            </div>
+                        </div>
+
+                        <div class="panel-grid">
+                            <article class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <p class="eyebrow">Appearance</p>
+                                        <h2>Theme</h2>
+                                    </div>
+                                </div>
+                                <div class="theme-chooser">
+                                    <button type="button" class="theme-option" :class="{ active: theme === 'dark' }" @click="setTheme('dark')">
+                                        <i class="fas fa-moon"></i>
+                                        <span>Dark</span>
+                                    </button>
+                                    <button type="button" class="theme-option" :class="{ active: theme === 'light' }" @click="setTheme('light')">
+                                        <i class="fas fa-sun"></i>
+                                        <span>Light</span>
+                                    </button>
+                                </div>
+                            </article>
+
+                            <article class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <p class="eyebrow">Node endpoint</p>
+                                        <h2>Preferred RPC</h2>
+                                    </div>
+                                </div>
+                                <label class="field">
+                                    <span>Known endpoints</span>
+                                    <select v-model="settings.selectedNode">
+                                        <option v-for="node in availableApiOptions" :key="node" :value="node">{{ node }}</option>
+                                    </select>
+                                </label>
+                                <div class="panel-actions">
+                                    <button type="button" class="button button--primary" @click="applySelectedNode">
+                                        <i class="fas fa-plug"></i>
+                                        Connect to this node
+                                    </button>
+                                </div>
+                                <label class="field">
+                                    <span>Custom endpoint</span>
+                                    <input v-model.trim="settings.customNode" type="text" placeholder="https://your-node:32448">
+                                </label>
+                                <div class="panel-actions">
+                                    <button type="button" class="button button--ghost" @click="applyCustomNode">
+                                        Save custom node
+                                    </button>
+                                </div>
+                            </article>
+
+                            <article class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <p class="eyebrow">Routing</p>
+                                        <h2>Clean links</h2>
+                                    </div>
+                                </div>
+                                <div class="detail-list">
+                                    <div class="detail-row"><span>Block</span><strong class="hash-string">/block/&lt;hash-or-height&gt;</strong></div>
+                                    <div class="detail-row"><span>Transaction</span><strong class="hash-string">/transaction/&lt;hash&gt;</strong></div>
+                                    <div class="detail-row"><span>Payment ID</span><strong class="hash-string">/payment-id/&lt;hash&gt;</strong></div>
+                                    <div class="detail-row"><span>Address</span><strong class="hash-string">/address/&lt;address&gt;</strong></div>
+                                </div>
+                                <p class="panel-copy">Direct visits rely on the custom `404.html` fallback already included in the repo for GitHub Pages.</p>
+                            </article>
+                        </div>
+                    </section>
+                </main>
+
+                <footer class="app-footer">
+                    <div>
+                        <span>&copy; 2017-2026 <strong>Karbo Developers</strong></span>
+                        <span>Blockchain Explorer app for <a href="https://github.com/Karbovanets/Karbowanec-Blockchain-Explorer" target="_blank" rel="noreferrer">GitHub</a> Pages</span>
+                    </div>
+                    <div class="footer-links">
+                        <a href="https://karbo.org/" target="_blank" rel="noreferrer">karbo.org</a>
+                        <a href="https://karbo.io/" target="_blank" rel="noreferrer">karbo.io</a>
+                    </div>
+                </footer>
+            </div>
+        </div>
+
+        <div v-if="pageBusy" class="busy-overlay">
+            <div class="spinner"></div>
+            <span>Loading...</span>
+        </div>
+
+        <transition name="toast">
+            <div v-if="toast" class="toast-banner" :class="'tone-' + toast.tone">{{ toast.message }}</div>
+        </transition>
+    </div>
+
+    <script src="/js/app.js"></script>
 </body>
 </html>
