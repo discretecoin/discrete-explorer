@@ -653,6 +653,25 @@ html[data-theme="light"] .searchbar-submit:hover {
     padding: 0.2rem 0;
 }
 
+.page-head--detail {
+    display: block;
+}
+
+.page-head-top {
+    align-items: start;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+}
+
+.page-head-top .eyebrow {
+    margin: 0;
+}
+
+.page-head-top .page-actions {
+    margin-top: 0;
+}
+
 .page-title {
     font-size: clamp(1.8rem, 3.4vw, 2.8rem);
 }
@@ -683,6 +702,10 @@ html[data-theme="light"] .searchbar-submit:hover {
 .panel-actions,
 .page-actions {
     margin-top: 1rem;
+}
+
+.panel-actions + .field {
+    margin-top: 0.8rem;
 }
 
 .panel-actions--blocks {
@@ -889,6 +912,10 @@ html[data-theme="dark"] .page-title--hash {
     display: flex;
     flex-direction: column;
     gap: 0.7rem;
+}
+
+.detail-list--after-notice {
+    margin-top: 0.85rem;
 }
 
 .detail-row {
@@ -1448,6 +1475,31 @@ html[data-theme="dark"] .detail-row .hash-string {
         font-size: clamp(1.8rem, 7vw, 2.45rem);
     }
 
+    .page-head {
+        flex-direction: column;
+    }
+
+    .page-head > div:first-child {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .page-head .page-actions {
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        margin-top: 0.25rem;
+        width: 100%;
+    }
+
+    .page-head-top {
+        flex-direction: column;
+        gap: 0.45rem;
+    }
+
+    .page-head-top .page-actions {
+        width: 100%;
+    }
+
     .panel,
     .hero-card,
     .hero-aside,
@@ -1525,8 +1577,16 @@ html[data-theme="dark"] .detail-row .hash-string {
         width: 100%;
     }
 
+    .page-head .page-actions .button {
+        width: auto;
+    }
+
     .panel-actions--blocks .button,
     .panel-actions--blocks .inline-control {
+        width: auto;
+    }
+
+    .page-head-top .page-actions .button {
         width: auto;
     }
 

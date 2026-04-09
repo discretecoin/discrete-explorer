@@ -294,9 +294,22 @@
                                         <button type="button" class="button button--ghost button--small" @click="goToHomeHeight">
                                             Go
                                         </button>
-                                        <button type="button" class="button button--ghost button--small" @click="goToLatestBlocks" :disabled="!stats">Latest</button>
-                                        <button type="button" class="button button--ghost button--small" @click="goToNewerBlocks" :disabled="!home.hasNewer">Newer</button>
-                                        <button type="button" class="button button--ghost button--small" @click="goToOlderBlocks" :disabled="!home.hasOlder">Older</button>
+                                        <button type="button" class="button button--ghost button--small" @click="goToFirstBlocks" :disabled="home.blocks.length && String(home.blocks[0].height) === '0'">
+                                            <i class="fas fa-step-backward"></i>
+                                            First
+                                        </button>
+                                        <button type="button" class="button button--ghost button--small" @click="goToOlderBlocks" :disabled="!home.hasOlder">
+                                            <i class="fas fa-backward"></i>
+                                            Older
+                                        </button>
+                                        <button type="button" class="button button--ghost button--small" @click="goToNewerBlocks" :disabled="!home.hasNewer">
+                                            Newer
+                                            <i class="fas fa-forward"></i>
+                                        </button>
+                                        <button type="button" class="button button--ghost button--small" @click="goToLatestBlocks" :disabled="!stats">
+                                            Latest
+                                            <i class="fas fa-step-forward"></i>
+                                        </button>
                                         <button type="button" class="button button--ghost button--small" @click="loadMoreBlocks" :disabled="!home.hasOlder || home.loadingMore">
                                             {{ home.loadingMore ? 'Loading...' : '+ More' }}
                                         </button>
@@ -360,32 +373,32 @@
                             <p>{{ blockView.error }}</p>
                         </div>
                         <template v-else-if="blockView.block">
-                            <div class="page-head">
-                                <div>
+                            <div class="page-head page-head--detail">
+                                <div class="page-head-top">
                                     <p class="eyebrow">Block detail</p>
-                                    <h1 class="page-title page-title--hash hash-string">{{ blockView.block.hash }}</h1>
-                                    <p class="page-subtitle">
-                                        Height #{{ formatNumber(blockView.block.index) }}
-                                        <span class="bullet">&middot;</span>
-                                        {{ blockView.block.isOrphaned ? 'Alternative chain block' : 'Main chain block' }}
-                                        <span class="bullet">&middot;</span>
-                                        {{ formatNumber(blockView.block.transactions.length) }} transactions
-                                    </p>
+                                    <div class="page-actions">
+                                        <button type="button" class="button button--ghost button--small" @click="goTo({ name: 'block', params: { hash: blockView.block.prevBlockHash } })" :disabled="!blockView.block.prevBlockHash">
+                                            <i class="fas fa-arrow-left"></i>
+                                            Previous
+                                        </button>
+                                        <button type="button" class="button button--ghost button--small" @click="goTo({ name: 'block', params: { hash: blockView.nextHash } })" :disabled="!blockView.nextHash">
+                                            Next
+                                            <i class="fas fa-arrow-right"></i>
+                                        </button>
+                                        <button type="button" class="button button--ghost button--small" @click="copyText(blockView.block.hash, 'Block hash copied')">
+                                            <i class="fas fa-copy"></i>
+                                            Copy
+                                        </button>
+                                    </div>
                                 </div>
-                                <div class="page-actions">
-                                    <button type="button" class="button button--ghost button--small" @click="goTo({ name: 'block', params: { hash: blockView.block.prevBlockHash } })" :disabled="!blockView.block.prevBlockHash">
-                                        <i class="fas fa-arrow-left"></i>
-                                        Previous
-                                    </button>
-                                    <button type="button" class="button button--ghost button--small" @click="goTo({ name: 'block', params: { hash: blockView.nextHash } })" :disabled="!blockView.nextHash">
-                                        Next
-                                        <i class="fas fa-arrow-right"></i>
-                                    </button>
-                                    <button type="button" class="button button--ghost button--small" @click="copyText(blockView.block.hash, 'Block hash copied')">
-                                        <i class="fas fa-copy"></i>
-                                        Copy
-                                    </button>
-                                </div>
+                                <h1 class="page-title page-title--hash hash-string">{{ blockView.block.hash }}</h1>
+                                <p class="page-subtitle">
+                                    Height #{{ formatNumber(blockView.block.index) }}
+                                    <span class="bullet">&middot;</span>
+                                    {{ blockView.block.isOrphaned ? 'Alternative chain block' : 'Main chain block' }}
+                                    <span class="bullet">&middot;</span>
+                                    {{ formatNumber(blockView.block.transactions.length) }} transactions
+                                </p>
                             </div>
 
                             <div class="metric-grid metric-grid--compact">
@@ -510,25 +523,25 @@
                             <p>{{ txView.error }}</p>
                         </div>
                         <template v-else-if="txView.tx">
-                            <div class="page-head">
-                                <div>
+                            <div class="page-head page-head--detail">
+                                <div class="page-head-top">
                                     <p class="eyebrow">Transaction detail</p>
-                                    <h1 class="page-title page-title--hash hash-string">{{ txView.tx.hash }}</h1>
-                                    <p class="page-subtitle">
-                                        <span class="status-pill" :class="txView.tx.inBlockchain ? 'is-online' : 'is-warning'">
-                                            <span class="status-dot"></span>
-                                            {{ txView.tx.inBlockchain ? 'Confirmed' : 'Unconfirmed' }}
-                                        </span>
-                                        <span class="bullet">&middot;</span>
-                                        {{ txView.tx.inBlockchain ? transactionConfirmations + ' confirmations' : 'Waiting for inclusion' }}
-                                    </p>
+                                    <div class="page-actions">
+                                        <button type="button" class="button button--ghost button--small" @click="copyText(txView.tx.hash, 'Transaction hash copied')">
+                                            <i class="fas fa-copy"></i>
+                                            Copy
+                                        </button>
+                                    </div>
                                 </div>
-                                <div class="page-actions">
-                                    <button type="button" class="button button--ghost button--small" @click="copyText(txView.tx.hash, 'Transaction hash copied')">
-                                        <i class="fas fa-copy"></i>
-                                        Copy
-                                    </button>
-                                </div>
+                                <h1 class="page-title page-title--hash hash-string">{{ txView.tx.hash }}</h1>
+                                <p class="page-subtitle">
+                                    <span class="status-pill" :class="txView.tx.inBlockchain ? 'is-online' : 'is-warning'">
+                                        <span class="status-dot"></span>
+                                        {{ txView.tx.inBlockchain ? 'Confirmed' : 'Unconfirmed' }}
+                                    </span>
+                                    <span class="bullet">&middot;</span>
+                                    {{ txView.tx.inBlockchain ? transactionConfirmations + ' confirmations' : 'Waiting for inclusion' }}
+                                </p>
                             </div>
 
                             <div class="metric-grid metric-grid--compact">
@@ -774,18 +787,18 @@
                     </section>
 
                     <section v-else-if="route.name === 'address'" class="page-section">
-                        <div class="page-head">
-                            <div>
+                        <div class="page-head page-head--detail">
+                            <div class="page-head-top">
                                 <p class="eyebrow">Address</p>
-                                <h1 class="page-title hash-string">{{ route.params.address }}</h1>
-                                <p class="page-subtitle">Address validation and public-key inspection.</p>
+                                <div class="page-actions">
+                                    <button type="button" class="button button--ghost button--small" @click="copyText(route.params.address, 'Address copied')">
+                                        <i class="fas fa-copy"></i>
+                                        Copy
+                                    </button>
+                                </div>
                             </div>
-                            <div class="page-actions">
-                                <button type="button" class="button button--ghost button--small" @click="copyText(route.params.address, 'Address copied')">
-                                    <i class="fas fa-copy"></i>
-                                    Copy
-                                </button>
-                            </div>
+                            <h1 class="page-title hash-string">{{ route.params.address }}</h1>
+                            <p class="page-subtitle">Address validation and public-key inspection.</p>
                         </div>
 
                         <div v-if="addressView.loading" class="state-card">
@@ -808,7 +821,7 @@
                                     <strong>{{ addressView.result && addressView.result.isValid ? 'Address is valid' : 'Address is invalid' }}</strong>
                                     <p v-if="addressView.result && addressView.result.isValid">View and spend public keys are available below.</p>
                                 </div>
-                                <div v-if="addressView.result && addressView.result.isValid" class="detail-list">
+                                <div v-if="addressView.result && addressView.result.isValid" class="detail-list detail-list--after-notice">
                                     <div class="detail-row"><span>View public key</span><strong class="hash-string">{{ addressView.result.viewPublicKey }}</strong></div>
                                     <div class="detail-row"><span>Spend public key</span><strong class="hash-string">{{ addressView.result.spendPublicKey }}</strong></div>
                                 </div>
@@ -1342,7 +1355,7 @@
                                 <div class="panel-header">
                                     <div>
                                         <p class="eyebrow">Routing</p>
-                                        <h2>Clean links</h2>
+                                        <h2>Explorer links</h2>
                                     </div>
                                 </div>
                                 <div class="detail-list">
@@ -1351,7 +1364,6 @@
                                     <div class="detail-row"><span>Payment ID</span><strong class="hash-string">/payment-id/&lt;hash&gt;</strong></div>
                                     <div class="detail-row"><span>Address</span><strong class="hash-string">/address/&lt;address&gt;</strong></div>
                                 </div>
-                                <p class="panel-copy">Direct visits rely on the custom `404.html` fallback already included in the repo for GitHub Pages.</p>
                             </article>
                         </div>
                     </section>

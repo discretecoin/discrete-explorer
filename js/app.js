@@ -549,9 +549,12 @@
                     error: "",
                     blocks: [],
                     mempool: [],
+                    mempoolLoaded: false,
                     recentTransactions: [],
                     recentTransactionsLoading: false,
                     recentTransactionsError: "",
+                    recentTransactionsLoaded: false,
+                    skipAuxReloadOnce: false,
                     pageSize: DEFAULT_PAGE_SIZE,
                     pageHeight: initialRoute.name === "home" ? coerceInteger(initialRoute.query.height) : null,
                     gotoHeight: initialRoute.name === "home" && initialRoute.query.height ? String(initialRoute.query.height) : "",
@@ -1171,6 +1174,7 @@
                 var normalized = normalizeRoute(route);
                 var url = buildRouteUrl(normalized);
                 var replace = options && options.replace;
+                var scrollTop = !options || options.scrollTop !== false;
                 if (url === window.location.pathname + window.location.search) {
                     this.route = normalized;
                     this.isMobileHeaderHidden = false;
@@ -1180,7 +1184,7 @@
                 if (replace) window.history.replaceState(null, "", url); else window.history.pushState(null, "", url);
                 this.route = normalized;
                 this.isMobileHeaderHidden = false;
-                window.scrollTo(0, 0);
+                if (scrollTop) window.scrollTo(0, 0);
                 await this.loadRouteData();
             },
             onPopState: async function () {
@@ -1208,6 +1212,10 @@
                 if (!background || !this.home.blocks.length) this.home.loading = true;
                 this.home.error = "";
                 try {
+                    var skipAuxReload = this.home.skipAuxReloadOnce;
+                    var skipMempoolReload = skipAuxReload && this.home.mempoolLoaded;
+                    var skipRecentTransactionsReload = skipAuxReload && this.home.recentTransactionsLoaded;
+                    this.home.skipAuxReloadOnce = false;
                     await this.ensureStats();
                     if (token !== this.routeRequestId) return false;
                     var tipHeight = this.getTipHeight();
@@ -1215,30 +1223,44 @@
                     if (targetHeight === null || targetHeight === undefined) targetHeight = tipHeight;
                     if (tipHeight !== null) targetHeight = Math.min(targetHeight, tipHeight);
                     targetHeight = Math.max(coerceInteger(targetHeight) || 0, 0);
-                    var results = await Promise.all([
-                        rpcCall(this.api, "getblockslist", { count: this.home.pageSize + 1, height: targetHeight }),
-                        rpcCall(this.api, "gettransactionspool", {})
-                    ]);
+                    var requests = [
+                        rpcCall(this.api, "getblockslist", { count: this.home.pageSize + 1, height: targetHeight })
+                    ];
+                    if (!skipMempoolReload) requests.push(rpcCall(this.api, "gettransactionspool", {}));
+                    var results = await Promise.all(requests);
                     if (token !== this.routeRequestId) return false;
                     var blocks = sortBlocksDescending(results[0].blocks || []);
                     var fetchedBlocks = blocks.slice(0, this.home.pageSize).map(function (block) {
                         return Object.assign({}, block);
                     });
                     var tailBlock = blocks[fetchedBlocks.length] ? Object.assign({}, blocks[fetchedBlocks.length]) : null;
-                    var preserveLoadedBlocks = this.home.blocks.length && tipHeight !== null && targetHeight === tipHeight && !this.home.hasNewer;
+                    var existingNewestHeight = this.home.blocks.length ? coerceInteger(this.home.blocks[0].height) : null;
+                    var fetchedOldestHeight = fetchedBlocks.length ? coerceInteger(fetchedBlocks[fetchedBlocks.length - 1].height) : null;
+                    var hasContiguousTipWindow = existingNewestHeight !== null
+                        && fetchedOldestHeight !== null
+                        && fetchedOldestHeight <= existingNewestHeight + 1;
+                    var preserveLoadedBlocks = this.home.blocks.length
+                        && tipHeight !== null
+                        && targetHeight === tipHeight
+                        && !this.home.hasNewer
+                        && hasContiguousTipWindow;
                     var displayedBlocks = preserveLoadedBlocks
                         ? decorateHomeBlocks(fetchedBlocks.concat(this.home.blocks))
                         : decorateHomeBlocks(fetchedBlocks, tailBlock);
-                    var mempool = (results[1].transactions || []).slice().sort(function (left, right) {
-                        return (coerceInteger(right.receive_time) || 0) - (coerceInteger(left.receive_time) || 0);
-                    });
                     this.home.blocks = displayedBlocks;
-                    this.home.mempool = mempool;
+                    if (!skipMempoolReload) {
+                        var mempoolResult = results[1] || {};
+                        var mempool = (mempoolResult.transactions || []).slice().sort(function (left, right) {
+                            return (coerceInteger(right.receive_time) || 0) - (coerceInteger(left.receive_time) || 0);
+                        });
+                        this.home.mempool = mempool;
+                        this.home.mempoolLoaded = true;
+                    }
                     this.home.pageHeight = displayedBlocks.length ? coerceInteger(displayedBlocks[0].height) : targetHeight;
                     this.home.gotoHeight = this.home.pageHeight !== null && this.home.pageHeight !== undefined ? String(this.home.pageHeight) : "";
                     this.home.hasOlder = displayedBlocks.length ? (coerceInteger(displayedBlocks[displayedBlocks.length - 1].height) || 0) > 0 : false;
                     this.home.hasNewer = displayedBlocks.length && tipHeight !== null ? (coerceInteger(displayedBlocks[0].height) || 0) < tipHeight : false;
-                    await this.loadRecentTransactions(token, displayedBlocks, background);
+                    if (!skipRecentTransactionsReload) await this.loadRecentTransactions(token, displayedBlocks, background);
                     this.home.loading = false;
                     this.home.loadingMore = false;
                     this.scheduleDifficultyChartRender();
@@ -1264,6 +1286,7 @@
                 if (newestVisibleHeight === null || newestVisibleHeight < 0) {
                     if (token !== this.routeRequestId) return;
                     this.home.recentTransactions = [];
+                    this.home.recentTransactionsLoaded = true;
                     this.home.recentTransactionsLoading = false;
                     return;
                 }
@@ -1297,6 +1320,7 @@
                     if (rangeStart === null || rangeEnd === null) {
                         if (token !== this.routeRequestId) return;
                         this.home.recentTransactions = [];
+                        this.home.recentTransactionsLoaded = true;
                         return;
                     }
 
@@ -1317,10 +1341,12 @@
                     });
                     if (token !== this.routeRequestId) return;
                     this.home.recentTransactions = transactions.slice(0, limit);
+                    this.home.recentTransactionsLoaded = true;
                 } catch (error) {
                     if (token !== this.routeRequestId) return;
                     this.home.recentTransactionsError = readableError(error, "Could not load recent confirmed transactions.");
                     if (!background || !this.home.recentTransactions.length) this.home.recentTransactions = [];
+                    this.home.recentTransactionsLoaded = false;
                 } finally {
                     if (token !== this.routeRequestId) return;
                     this.home.recentTransactionsLoading = false;
@@ -1561,12 +1587,17 @@
                     this.pageBusy = false;
                 }
             },
-            resetHomeBlocks: function () {
+            resetHomeBlocks: function (options) {
+                var opts = options || {};
                 this.home.blocks = [];
-                this.home.mempool = [];
-                this.home.recentTransactions = [];
-                this.home.recentTransactionsError = "";
-                this.home.recentTransactionsLoading = false;
+                if (!opts.preserveAux) {
+                    this.home.mempool = [];
+                    this.home.mempoolLoaded = false;
+                    this.home.recentTransactions = [];
+                    this.home.recentTransactionsError = "";
+                    this.home.recentTransactionsLoading = false;
+                    this.home.recentTransactionsLoaded = false;
+                }
                 this.home.hasOlder = false;
                 this.home.hasNewer = false;
                 this.home.loadingMore = false;
@@ -1574,15 +1605,22 @@
             goToLatestBlocks: async function () {
                 var tipHeight = this.getTipHeight();
                 if (tipHeight === null) return;
-                this.resetHomeBlocks();
-                await this.goTo({ name: "home", query: { height: String(tipHeight) } }, { replace: true });
+                this.home.skipAuxReloadOnce = true;
+                this.resetHomeBlocks({ preserveAux: true });
+                await this.goTo({ name: "home", query: { height: String(tipHeight) } }, { replace: true, scrollTop: false });
+            },
+            goToFirstBlocks: async function () {
+                this.home.skipAuxReloadOnce = true;
+                this.resetHomeBlocks({ preserveAux: true });
+                await this.goTo({ name: "home", query: { height: "0" } }, { replace: true, scrollTop: false });
             },
             goToOlderBlocks: async function () {
                 if (!this.home.blocks.length) return;
                 var oldest = coerceInteger(this.home.blocks[this.home.blocks.length - 1].height);
                 if (oldest === null || oldest <= 0) return;
-                this.resetHomeBlocks();
-                await this.goTo({ name: "home", query: { height: String(Math.max(oldest - 1, 0)) } }, { replace: true });
+                this.home.skipAuxReloadOnce = true;
+                this.resetHomeBlocks({ preserveAux: true });
+                await this.goTo({ name: "home", query: { height: String(Math.max(oldest - 1, 0)) } }, { replace: true, scrollTop: false });
             },
             loadMoreBlocks: async function () {
                 if (this.home.loadingMore || !this.home.blocks.length) return;
@@ -1617,15 +1655,16 @@
                 var newest = coerceInteger(this.home.blocks[0].height);
                 var tipHeight = this.getTipHeight();
                 if (newest === null || tipHeight === null) return;
-                this.resetHomeBlocks();
-                await this.goTo({ name: "home", query: { height: String(Math.min(newest + this.home.pageSize, tipHeight)) } }, { replace: true });
+                this.home.skipAuxReloadOnce = true;
+                this.resetHomeBlocks({ preserveAux: true });
+                await this.goTo({ name: "home", query: { height: String(Math.min(newest + this.home.pageSize, tipHeight)) } }, { replace: true, scrollTop: false });
             },
             reloadHome: async function () {
                 var targetHeight = this.home.pageHeight !== null && this.home.pageHeight !== undefined
                     ? this.home.pageHeight
                     : this.getTipHeight();
                 this.resetHomeBlocks();
-                await this.goTo({ name: "home", query: { height: String(targetHeight || 0) } }, { replace: true });
+                await this.goTo({ name: "home", query: { height: String(targetHeight || 0) } }, { replace: true, scrollTop: false });
             },
             goToHomeHeight: async function () {
                 var targetHeight = coerceInteger(this.home.gotoHeight);
@@ -1634,7 +1673,7 @@
                     return;
                 }
                 this.resetHomeBlocks();
-                await this.goTo({ name: "home", query: { height: String(targetHeight) } }, { replace: true });
+                await this.goTo({ name: "home", query: { height: String(targetHeight) } }, { replace: true, scrollTop: false });
             },
             submitSearch: async function () {
                 var query = this.searchQuery.trim();
