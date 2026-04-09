@@ -136,6 +136,42 @@
         return Number.isFinite(numeric) ? BigInt(Math.trunc(numeric)) : null;
     }
 
+    function renderAtomicCoins(value, precision, includeSymbol, trimTrailingZeros) {
+        var atomics = toAtomicBigInt(value);
+        if (atomics === null) return "--";
+        var withSymbol = includeSymbol !== false;
+        var negative = atomics < 0n;
+        var absolute = negative ? -atomics : atomics;
+        var rendered = "";
+        var limitedPrecision = typeof precision === "number" && Number.isFinite(precision)
+            ? Math.max(Math.min(Math.trunc(precision), COIN_DECIMALS), 0)
+            : null;
+
+        if (COIN_DECIMALS > 0) {
+            var absoluteString = absolute.toString();
+            var wholePart = absoluteString.length > COIN_DECIMALS
+                ? absoluteString.slice(0, absoluteString.length - COIN_DECIMALS)
+                : "0";
+            var fractionPart = absoluteString.length > COIN_DECIMALS
+                ? absoluteString.slice(absoluteString.length - COIN_DECIMALS)
+                : absoluteString.padStart(COIN_DECIMALS, "0");
+
+            if (limitedPrecision !== null) {
+                fractionPart = limitedPrecision > 0 ? fractionPart.slice(0, limitedPrecision) : "";
+            }
+
+            rendered = formatIntegerString(wholePart);
+            if (fractionPart) rendered += "." + fractionPart;
+            if (trimTrailingZeros) rendered = rendered.replace(/0+$/, "").replace(/\.$/, "");
+        } else {
+            rendered = formatIntegerString(absolute.toString());
+        }
+
+        if (negative) rendered = "-" + rendered;
+        if (withSymbol) rendered += " " + String(window.symbol || "KRB");
+        return rendered;
+    }
+
     function bytesToHex(bytes) {
         if (!bytes || typeof bytes.length !== "number") return "";
         var parts = [];
@@ -623,7 +659,7 @@
             txFeeText: function () {
                 if (!this.txView.tx) return "--";
                 if (this.txView.tx.inputs && this.txView.tx.inputs[0] && this.txView.tx.inputs[0].type === "ff") return "Coinbase";
-                return this.formatCoins(this.txView.tx.fee, 4);
+                return this.formatCoins(this.txView.tx.fee, 12);
             },
             transactionPaymentId: function () {
                 if (!this.txView.tx || !this.txView.tx.paymentId) return "";
@@ -736,20 +772,13 @@
                 return formatCountValue(value);
             },
             formatCoins: function (value, precision, includeSymbol) {
-                var atomics = toAtomicBigInt(value);
-                if (atomics === null) return "--";
-                var withSymbol = includeSymbol !== false;
-                var decimals = typeof precision === "number" ? precision : 4;
-                var negative = atomics < 0n;
-                var absolute = negative ? -atomics : atomics;
-                var whole = absolute / COIN_UNIT_BIGINT;
-                var fraction = (absolute % COIN_UNIT_BIGINT).toString().padStart(COIN_DECIMALS, "0");
-                var visibleFraction = decimals > 0 ? fraction.slice(0, decimals).replace(/0+$/, "") : "";
-                var rendered = formatIntegerString(whole.toString());
-                if (visibleFraction) rendered += "." + visibleFraction;
-                if (negative) rendered = "-" + rendered;
-                if (withSymbol) rendered += " " + String(window.symbol || "KRB");
-                return rendered;
+                var normalizedPrecision = precision;
+                var normalizedIncludeSymbol = includeSymbol;
+                if (typeof precision === "boolean" && includeSymbol === undefined) {
+                    normalizedPrecision = undefined;
+                    normalizedIncludeSymbol = precision;
+                }
+                return renderAtomicCoins(value, normalizedPrecision, normalizedIncludeSymbol, true);
             },
             formatBytes: function (value) {
                 var numeric = Number(value);

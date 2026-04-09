@@ -86,7 +86,7 @@
                             </article>
                             <article class="metric-card">
                                 <span class="metric-label">Supply</span>
-                                <strong>{{ stats ? formatCoins(stats.already_generated_coins, 2) : '--' }}</strong>
+                                <strong>{{ stats ? formatCoins(stats.already_generated_coins) : '--' }}</strong>
                                 <span class="metric-meta">Already generated coins</span>
                             </article>
                             <article class="metric-card">
@@ -101,12 +101,12 @@
                             </article>
                             <article class="metric-card">
                                 <span class="metric-label">Next reward</span>
-                                <strong>{{ stats ? formatCoins(stats.next_reward, 4) : '--' }}</strong>
+                                <strong>{{ stats ? formatCoins(stats.next_reward) : '--' }}</strong>
                                 <span class="metric-meta">Projected base block reward</span>
                             </article>
                             <article class="metric-card">
                                 <span class="metric-label">Min fee</span>
-                                <strong>{{ stats ? formatCoins(stats.min_fee, 2) : '--' }}</strong>
+                                <strong>{{ stats ? formatCoins(stats.min_fee) : '--' }}</strong>
                                 <span class="metric-meta">Network minimum fee</span>
                             </article>
                             <article class="metric-card metric-card--node">
@@ -205,8 +205,8 @@
                                                         <span class="muted">{{ formatRelativeTime(tx.receive_time) }}</span>
                                                     </div>
                                                 </td>
-                                                <td>{{ formatCoins(tx.amount_out, 4, false) }}</td>
-                                                <td>{{ formatCoins(tx.fee, 4, false) }}</td>
+                                                <td>{{ formatCoins(tx.amount_out, false) }}</td>
+                                                <td>{{ formatCoins(tx.fee, false) }}</td>
                                                 <td><span class="nowrap-value">{{ formatBytes(tx.size) }}</span></td>
                                                 <td>
                                                     <a class="hash-string inline-link" :href="linkTo({ name: 'transaction', params: { hash: tx.hash } })" @click.prevent="goTo({ name: 'transaction', params: { hash: tx.hash } })">{{ tx.hash }}</a>
@@ -257,8 +257,8 @@
                                                         <span class="muted">{{ formatRelativeTime(tx.timestamp) }}</span>
                                                     </div>
                                                 </td>
-                                                <td>{{ formatCoins(tx.totalOutputsAmount, 4, false) }}</td>
-                                                <td>{{ formatCoins(tx.fee, 4, false) }}</td>
+                                                <td>{{ formatCoins(tx.totalOutputsAmount, false) }}</td>
+                                                <td>{{ formatCoins(tx.fee, false) }}</td>
                                                 <td><span class="nowrap-value">{{ formatBytes(tx.size) }}</span></td>
                                                 <td>
                                                     <a class="inline-link" :href="linkTo({ name: 'block', params: { hash: String(tx.blockIndex) } })" @click.prevent="goTo({ name: 'block', params: { hash: String(tx.blockIndex) } })">#{{ formatNumber(tx.blockIndex) }}</a>
@@ -401,7 +401,7 @@
                                 </article>
                                 <article class="metric-card">
                                     <span class="metric-label">Reward</span>
-                                    <strong>{{ formatCoins(blockView.block.reward, 4) }}</strong>
+                                    <strong>{{ formatCoins(blockView.block.reward) }}</strong>
                                     <span class="metric-meta">Base + fees after penalty</span>
                                 </article>
                                 <article class="metric-card">
@@ -438,7 +438,7 @@
                                         <div class="detail-row"><span>Version</span><strong>{{ blockView.block.majorVersion }}.{{ blockView.block.minorVersion }}</strong></div>
                                         <div class="detail-row"><span>Nonce</span><strong>{{ formatNumber(blockView.block.nonce) }}</strong></div>
                                         <div class="detail-row"><span>Orphaned</span><strong>{{ blockView.block.isOrphaned ? 'Yes' : 'No' }}</strong></div>
-                                        <div class="detail-row"><span>Total coins</span><strong>{{ formatCoins(blockView.block.alreadyGeneratedCoins, 2) }}</strong></div>
+                                        <div class="detail-row"><span>Total coins</span><strong>{{ formatCoins(blockView.block.alreadyGeneratedCoins) }}</strong></div>
                                         <div class="detail-row"><span>Total transactions</span><strong>{{ formatNumber(blockView.block.alreadyGeneratedTransactions) }}</strong></div>
                                         <div class="detail-row">
                                             <span>Signature</span>
@@ -455,8 +455,8 @@
                                         </div>
                                     </div>
                                     <div class="detail-list">
-                                        <div class="detail-row"><span>Base reward</span><strong>{{ formatCoins(blockView.block.baseReward, 4) }}</strong></div>
-                                        <div class="detail-row"><span>Transactions fee</span><strong>{{ formatCoins(blockView.block.totalFeeAmount, 4) }}</strong></div>
+                                        <div class="detail-row"><span>Base reward</span><strong>{{ formatCoins(blockView.block.baseReward) }}</strong></div>
+                                        <div class="detail-row"><span>Transactions fee</span><strong>{{ formatCoins(blockView.block.totalFeeAmount) }}</strong></div>
                                         <div class="detail-row"><span>Penalty</span><strong>{{ formatPercent(blockView.block.penalty) }}</strong></div>
                                         <div class="detail-row"><span>Transactions size</span><strong>{{ formatBytes(blockView.block.transactionsCumulativeSize) }}</strong></div>
                                         <div class="detail-row"><span>Median</span><strong>{{ formatBytes(blockView.block.sizeMedian) }}</strong></div>
@@ -489,8 +489,8 @@
                                                 <td>
                                                     <a class="hash-string inline-link" :href="linkTo({ name: 'transaction', params: { hash: transaction.hash } })" @click.prevent="goTo({ name: 'transaction', params: { hash: transaction.hash } })">{{ transaction.hash }}</a>
                                                 </td>
-                                                <td>{{ formatCoins(transaction.fee, 4, false) }}</td>
-                                                <td>{{ formatCoins(transaction.totalOutputsAmount, 4, false) }}</td>
+                                                <td>{{ formatCoins(transaction.fee, false) }}</td>
+                                                <td>{{ formatCoins(transaction.totalOutputsAmount, false) }}</td>
                                                 <td>{{ formatBytes(transaction.size) }}</td>
                                             </tr>
                                         </tbody>
@@ -539,7 +539,7 @@
                                 </article>
                                 <article class="metric-card">
                                     <span class="metric-label">Outputs sum</span>
-                                    <strong>{{ formatCoins(txView.tx.totalOutputsAmount, 4) }}</strong>
+                                    <strong>{{ formatCoins(txView.tx.totalOutputsAmount, 12) }}</strong>
                                     <span class="metric-meta">Visible outputs total</span>
                                 </article>
                                 <article class="metric-card">
@@ -662,7 +662,7 @@
                                         <tbody>
                                             <tr v-for="(input, index) in txView.tx.inputs" :key="input.type + '-' + index">
                                                 <template v-if="input.type !== 'ff'">
-                                                    <td>{{ formatCoins(input.data.input.amount, 4) }}</td>
+                                                    <td>{{ formatCoins(input.data.input.amount, 12) }}</td>
                                                     <td><span class="hash-string">{{ input.data.input.k_image }}</span></td>
                                                     <td>
                                                         <span v-for="(offset, offsetIndex) in input.data.input.key_offsets" :key="offset + '-' + offsetIndex">
@@ -672,7 +672,7 @@
                                                     <td>{{ input.type }}</td>
                                                 </template>
                                                 <template v-else>
-                                                    <td>{{ formatCoins(input.data.amount, 4) }}</td>
+                                                    <td>{{ formatCoins(input.data.amount, 12) }}</td>
                                                     <td colspan="2">Coinbase</td>
                                                     <td>{{ input.type }}</td>
                                                 </template>
@@ -695,7 +695,7 @@
                                         </thead>
                                         <tbody>
                                             <tr v-for="(output, index) in txView.tx.outputs" :key="output.output.target.data.key + '-' + index" :class="{ 'row-highlight': isOutputHighlighted(output, index) }">
-                                                <td>{{ formatCoins(output.output.amount, 4) }}</td>
+                                                <td>{{ formatCoins(output.output.amount, 12) }}</td>
                                                 <td><span class="hash-string">{{ output.output.target.data.key }}</span></td>
                                                 <td>{{ formatNumber(output.globalIndex) }}</td>
                                                 <td>{{ output.output.target.type }}</td>
@@ -763,8 +763,8 @@
                                             <td>
                                                 <a class="hash-string inline-link" :href="linkTo({ name: 'transaction', params: { hash: transaction.hash } })" @click.prevent="goTo({ name: 'transaction', params: { hash: transaction.hash } })">{{ transaction.hash }}</a>
                                             </td>
-                                            <td>{{ formatCoins(transaction.fee, 4, false) }}</td>
-                                            <td>{{ formatCoins(transaction.amount_out || transaction.totalOutputsAmount, 4, false) }}</td>
+                                            <td>{{ formatCoins(transaction.fee, false) }}</td>
+                                            <td>{{ formatCoins(transaction.amount_out || transaction.totalOutputsAmount, false) }}</td>
                                             <td>{{ formatBytes(transaction.size) }}</td>
                                         </tr>
                                     </tbody>
