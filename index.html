@@ -75,9 +75,9 @@
                     <section v-if="route.name === 'home'" class="page-section">
                         <div class="metric-grid">
                             <article class="metric-card">
-                                <span class="metric-label">Height</span>
-                                <strong>{{ stats ? formatNumber(stats.height) : '--' }}</strong>
-                                <span class="metric-meta">Last known {{ stats ? formatNumber(stats.last_known_block_index) : '--' }}</span>
+                                <span class="metric-label">Tip</span>
+                                <strong>{{ stats ? '#' + formatNumber(stats.last_known_block_index) : '--' }}</strong>
+                                <span class="metric-meta">{{ stats ? formatNumber(stats.height) + ' total blocks' : '--' }}</span>
                             </article>
                             <article class="metric-card">
                                 <span class="metric-label">Transactions</span>
