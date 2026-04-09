@@ -97,7 +97,7 @@
                             <article class="metric-card">
                                 <span class="metric-label">Hashrate</span>
                                 <strong>{{ stats ? formatHashrate(stats.difficulty / blockTargetInterval) : '--' }}</strong>
-                                <span class="metric-meta">Based on current network difficulty</span>
+                                <span class="metric-meta">{{ averageAlgoHashrate ? 'Avg.' + ': ' + formatHashrate(averageAlgoHashrate) : 'Based on current network difficulty' }}</span>
                             </article>
                             <article class="metric-card">
                                 <span class="metric-label">Next reward</span>

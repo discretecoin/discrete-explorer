@@ -14,6 +14,8 @@
     var RECENT_CONFIRMED_TX_LIMIT = 20;
     var RECENT_CONFIRMED_TX_SCAN_BATCH = Number(window.recentConfirmedTxBlockRange) || 1000;
     var DATE_LOCALE = "en-GB";
+    var AVG_HASHRATE_BASELINE_HEIGHT = coerceInteger(window.avgHashrateBaselineHeight);
+    var AVG_HASHRATE_BASELINE_CUMULATIVE_DIFFICULTY = toBigIntValue(window.avgHashrateBaselineCumulativeDifficulty);
     var ADDRESS_PATTERN = window.addressPattern instanceof RegExp
         ? window.addressPattern
         : /^K[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{94}$/;
@@ -131,6 +133,19 @@
             var fraction = (parts[1] || "").padEnd(COIN_DECIMALS, "0").slice(0, COIN_DECIMALS);
             var atomic = BigInt(whole + fraction);
             return negative ? -atomic : atomic;
+        }
+        var numeric = Number(raw);
+        return Number.isFinite(numeric) ? BigInt(Math.trunc(numeric)) : null;
+    }
+
+    function toBigIntValue(value) {
+        if (value === null || value === undefined || value === "") return null;
+        if (typeof value === "bigint") return value;
+        if (typeof value === "number") return Number.isFinite(value) ? BigInt(Math.trunc(value)) : null;
+        var raw = String(value).trim().replace(/,/g, "");
+        if (!raw) return null;
+        if (/^-?\d+$/.test(raw)) {
+            try { return BigInt(raw); } catch (error) { return null; }
         }
         var numeric = Number(raw);
         return Number.isFinite(numeric) ? BigInt(Math.trunc(numeric)) : null;
@@ -508,6 +523,7 @@
                 theme: initialTheme,
                 api: initialApi,
                 blockTargetInterval: Number(window.blockTargetInterval) || 0,
+                avgHashrateBaselineHeight: AVG_HASHRATE_BASELINE_HEIGHT,
                 searchQuery: "",
                 stats: null,
                 statsStatus: "loading",
@@ -685,6 +701,28 @@
             transactionDecodedExtraNonce: function () {
                 var nonce = this.transactionExtraNonce;
                 return nonce ? hexToAscii(nonce) : "";
+            },
+            averageAlgoHashrate: function () {
+                var currentHeight = coerceInteger(this.stats && this.stats.height);
+                var cumulativeDifficulty = toBigIntValue(this.stats && (this.stats.cumulative_difficulty !== undefined
+                    ? this.stats.cumulative_difficulty
+                    : this.stats.cumulativeDifficulty));
+                if (this.blockTargetInterval <= 0
+                    || AVG_HASHRATE_BASELINE_HEIGHT === null
+                    || AVG_HASHRATE_BASELINE_CUMULATIVE_DIFFICULTY === null
+                    || currentHeight === null
+                    || currentHeight <= AVG_HASHRATE_BASELINE_HEIGHT
+                    || cumulativeDifficulty === null
+                    || cumulativeDifficulty <= AVG_HASHRATE_BASELINE_CUMULATIVE_DIFFICULTY) {
+                    return null;
+                }
+
+                var heightSpan = currentHeight - AVG_HASHRATE_BASELINE_HEIGHT;
+                if (heightSpan <= 0) return null;
+
+                var cumulativeSpan = cumulativeDifficulty - AVG_HASHRATE_BASELINE_CUMULATIVE_DIFFICULTY;
+                var averageHashrate = Number(cumulativeSpan) / heightSpan / this.blockTargetInterval;
+                return Number.isFinite(averageHashrate) && averageHashrate > 0 ? averageHashrate : null;
             },
             difficultyChart: function () {
                 var blocks = this.home.blocks.slice().reverse();
