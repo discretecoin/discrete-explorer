@@ -519,6 +519,12 @@
                 clockTimerId: 0,
                 pollTimerId: 0,
                 popstateHandler: null,
+                mobileHeaderScrollHandler: null,
+                mobileHeaderResizeHandler: null,
+                mobileHeaderLastScrollY: 0,
+                mobileHeaderTicking: false,
+                isMobileHeaderHidden: false,
+                isCompactViewport: false,
                 nowSeconds: Math.floor(Date.now() / 1000),
                 primaryNav: [
                     { name: "home", label: "Overview", icon: "fa-chart-line" },
@@ -727,6 +733,39 @@
             }
         },
         methods: {
+            syncMobileHeaderViewport: function () {
+                this.isCompactViewport = window.innerWidth <= 760;
+                if (!this.isCompactViewport) this.isMobileHeaderHidden = false;
+                this.mobileHeaderLastScrollY = Math.max(window.scrollY || window.pageYOffset || 0, 0);
+            },
+            updateMobileHeaderVisibility: function () {
+                var currentScrollY = Math.max(window.scrollY || window.pageYOffset || 0, 0);
+                if (!this.isCompactViewport) {
+                    this.isMobileHeaderHidden = false;
+                    this.mobileHeaderLastScrollY = currentScrollY;
+                    return;
+                }
+
+                var delta = currentScrollY - this.mobileHeaderLastScrollY;
+                if (currentScrollY <= 20) {
+                    this.isMobileHeaderHidden = false;
+                } else if (delta > 8) {
+                    this.isMobileHeaderHidden = true;
+                } else if (delta < -8) {
+                    this.isMobileHeaderHidden = false;
+                }
+
+                this.mobileHeaderLastScrollY = currentScrollY;
+            },
+            requestMobileHeaderUpdate: function () {
+                var _this = this;
+                if (this.mobileHeaderTicking) return;
+                this.mobileHeaderTicking = true;
+                window.requestAnimationFrame(function () {
+                    _this.mobileHeaderTicking = false;
+                    _this.updateMobileHeaderVisibility();
+                });
+            },
             isPrimaryActive: function (routeName) {
                 if (routeName === "tools") {
                     return this.route.name === "tools" || this.toolNav.some(function (item) { return item.name === this.route.name; }, this);
@@ -1134,16 +1173,19 @@
                 var replace = options && options.replace;
                 if (url === window.location.pathname + window.location.search) {
                     this.route = normalized;
+                    this.isMobileHeaderHidden = false;
                     await this.loadRouteData();
                     return;
                 }
                 if (replace) window.history.replaceState(null, "", url); else window.history.pushState(null, "", url);
                 this.route = normalized;
+                this.isMobileHeaderHidden = false;
                 window.scrollTo(0, 0);
                 await this.loadRouteData();
             },
             onPopState: async function () {
                 this.route = parseCurrentRoute(window.location);
+                this.isMobileHeaderHidden = false;
                 await this.loadRouteData();
             },
             loadRouteData: async function (options) {
@@ -1977,6 +2019,11 @@
             this.applyTheme();
             this.popstateHandler = function () { _this3.onPopState(); };
             window.addEventListener("popstate", this.popstateHandler);
+            this.syncMobileHeaderViewport();
+            this.mobileHeaderScrollHandler = function () { _this3.requestMobileHeaderUpdate(); };
+            this.mobileHeaderResizeHandler = function () { _this3.syncMobileHeaderViewport(); };
+            window.addEventListener("scroll", this.mobileHeaderScrollHandler, { passive: true });
+            window.addEventListener("resize", this.mobileHeaderResizeHandler);
             this.clockTimerId = window.setInterval(function () {
                 _this3.nowSeconds = Math.floor(Date.now() / 1000);
             }, 1000);
@@ -2009,6 +2056,8 @@
             if (this.clockTimerId) window.clearInterval(this.clockTimerId);
             if (this.pollTimerId) window.clearInterval(this.pollTimerId);
             if (this.popstateHandler) window.removeEventListener("popstate", this.popstateHandler);
+            if (this.mobileHeaderScrollHandler) window.removeEventListener("scroll", this.mobileHeaderScrollHandler);
+            if (this.mobileHeaderResizeHandler) window.removeEventListener("resize", this.mobileHeaderResizeHandler);
         }
     }).mount("#app");
 })();

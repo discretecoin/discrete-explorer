@@ -30,7 +30,7 @@
     <div id="app" v-cloak>
         <div class="app-shell">
             <div class="app-main">
-                <header class="topbar">
+                <header class="topbar" :class="{ 'topbar--mobile-hidden': isMobileHeaderHidden }">
                     <div class="topbar-main">
                         <a class="brand brand--top" :href="linkTo({ name: 'home' })" @click.prevent="goTo({ name: 'home' })">
                             <span class="brand-mark">

@@ -395,6 +395,8 @@ html[data-theme="light"] .searchbar-submit:hover {
     display: block;
     position: sticky;
     top: 1rem;
+    transition: transform 180ms ease, opacity 180ms ease;
+    will-change: transform;
     z-index: 20;
 }
 
@@ -1406,6 +1408,12 @@ html[data-theme="dark"] .detail-row .hash-string {
 
     .topbar {
         top: 0.8rem;
+    }
+
+    .topbar--mobile-hidden {
+        opacity: 0.01;
+        pointer-events: none;
+        transform: translateY(calc(-100% - 1rem));
     }
 
     .topbar-main {
