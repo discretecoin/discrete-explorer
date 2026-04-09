@@ -1377,6 +1377,10 @@ html[data-theme="dark"] .detail-row .hash-string {
     .metric-card--span-3 {
         grid-column: auto;
     }
+
+    .chart-stat-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 @media (max-width: 980px) {
@@ -1525,5 +1529,11 @@ html[data-theme="dark"] .detail-row .hash-string {
 
     .hash-string {
         max-width: 82vw;
+    }
+}
+
+@media (max-width: 380px) {
+    .chart-stat-strip {
+        grid-template-columns: 1fr;
     }
 }
