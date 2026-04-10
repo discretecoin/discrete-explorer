@@ -306,7 +306,7 @@
                                             Newer
                                             <i class="fas fa-forward"></i>
                                         </button>
-                                        <button type="button" class="button button--ghost button--small" @click="goToLatestBlocks" :disabled="!stats">
+                                        <button type="button" class="button button--ghost button--small" @click="goToLatestBlocks" :disabled="!stats || !home.hasNewer">
                                             Latest
                                             <i class="fas fa-step-forward"></i>
                                         </button>

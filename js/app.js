@@ -1642,7 +1642,7 @@
             },
             goToLatestBlocks: async function () {
                 var tipHeight = this.getTipHeight();
-                if (tipHeight === null) return;
+                if (tipHeight === null || !this.home.hasNewer) return;
                 this.home.skipAuxReloadOnce = true;
                 this.resetHomeBlocks({ preserveAux: true });
                 await this.goTo({ name: "home", query: { height: String(tipHeight) } }, { replace: true, scrollTop: false });
