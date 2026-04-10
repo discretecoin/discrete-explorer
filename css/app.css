@@ -1542,12 +1542,31 @@ html[data-theme="dark"] .detail-row .hash-string {
 
 @media (max-width: 560px) {
     .brand--top {
+        grid-area: brand;
         min-width: 0;
+    }
+
+    .topbar-main {
+        align-items: center;
+        display: grid;
+        gap: 0.7rem;
+        grid-template-areas:
+            "brand actions"
+            "search search"
+            "nav nav";
+        grid-template-columns: minmax(0, 1fr) auto;
     }
 
     .searchbar {
         border-radius: 24px;
         padding: 0.35rem;
+    }
+
+    .searchbar--compact {
+        flex-basis: auto;
+        grid-area: search;
+        min-width: 0;
+        width: 100%;
     }
 
     .searchbar-icon {
@@ -1559,10 +1578,13 @@ html[data-theme="dark"] .detail-row .hash-string {
     }
 
     .topbar-actions {
-        justify-content: flex-end;
+        grid-area: actions;
+        justify-self: end;
+        position: static;
     }
 
     .topbar-nav {
+        grid-area: nav;
         width: 100%;
     }
 
