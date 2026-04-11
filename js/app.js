@@ -19,6 +19,9 @@
     var ADDRESS_PATTERN = window.addressPattern instanceof RegExp
         ? window.addressPattern
         : /^K[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{94}$/;
+    var ACCOUNT_NUMBER_PATTERN = window.accountNumberPattern instanceof RegExp
+        ? window.accountNumberPattern
+        : /^\d+-\d+-[0-9A-Za-z]$/;
     var SIMPLE_ROUTE_NAMES = [
         "nodes",
         "alt-blocks",
@@ -81,6 +84,29 @@
         var normalized = normalizeHex(value);
         var exactLength = typeof length === "number" ? "{".concat(length, "}") : "+";
         return new RegExp("^[0-9a-f]".concat(exactLength, "$")).test(normalized);
+    }
+
+    function normalizeAccountNumber(value) {
+        var raw = String(value || "").trim();
+        if (!raw) return "";
+        var parts = raw.split("-");
+        if (parts.length !== 3) return raw;
+        return "".concat(parts[0], "-").concat(parts[1], "-").concat(String(parts[2] || "").toUpperCase());
+    }
+
+    function parseAccountNumber(value) {
+        var normalized = normalizeAccountNumber(value);
+        if (!ACCOUNT_NUMBER_PATTERN.test(normalized)) return null;
+        var parts = normalized.split("-");
+        var blockHeight = coerceInteger(parts[0]);
+        var txIndex = coerceInteger(parts[1]);
+        if (blockHeight === null || blockHeight < 0 || txIndex === null || txIndex < 0) return null;
+        return {
+            value: normalized,
+            blockHeight: blockHeight,
+            txIndex: txIndex,
+            checkDigit: parts[2]
+        };
     }
 
     function coerceInteger(value) {
@@ -369,6 +395,11 @@
             normalized.params.address = String(params.address).trim();
             return normalized;
         }
+        if (name === "account-number" && params.accountNumber) {
+            normalized.name = "account-number";
+            normalized.params.accountNumber = normalizeAccountNumber(params.accountNumber);
+            return normalized;
+        }
         return normalized;
     }
 
@@ -382,6 +413,7 @@
         }
         if (isSimpleRouteName(normalized.name)) return "/".concat(normalized.name);
         if (normalized.name === "address") return "/address/".concat(encodeURIComponent(normalized.params.address));
+        if (normalized.name === "account-number") return "/account/".concat(encodeURIComponent(normalized.params.accountNumber));
         var path = "/".concat(normalized.name, "/").concat(encodeURIComponent(normalized.params.hash));
         if (normalized.name === "transaction" && normalized.query.highlight) query.set("highlight", normalized.query.highlight);
         var search = query.toString();
@@ -392,10 +424,14 @@
         var params = new URLSearchParams(locationObject.search || "");
         var hash = String(locationObject.hash || "").replace(/^#/, "").toLowerCase();
         var value = params.get("hash");
+        var address = params.get("address");
         if (value) {
             if (hash === "block") return normalizeRoute({ name: "block", params: { hash: value } });
             if (hash === "transaction") return normalizeRoute({ name: "transaction", params: { hash: value } });
             if (hash === "payment-id" || hash === "payment_id") return normalizeRoute({ name: "payment-id", params: { hash: value } });
+        }
+        if (address && hash === "address") {
+            return normalizeRoute({ name: "address", params: { address: address } });
         }
         if (hash === "nodes") return normalizeRoute({ name: "nodes" });
         if (hash === "alt-blocks" || hash === "alt_blocks") return normalizeRoute({ name: "alt-blocks" });
@@ -422,6 +458,7 @@
         if (isSimpleRouteName(segments[0])) return normalizeRoute({ name: segments[0] });
         if ((segments[0] === "block" || segments[0] === "transaction" || segments[0] === "payment-id") && segments[1]) return normalizeRoute({ name: segments[0], params: { hash: segments[1] }, query: query });
         if (segments[0] === "address" && segments[1]) return normalizeRoute({ name: "address", params: { address: segments[1] } });
+        if ((segments[0] === "account" || segments[0] === "account-number") && segments[1]) return normalizeRoute({ name: "account-number", params: { accountNumber: segments[1] } });
         return normalizeRoute({ name: "home", query: query });
     }
 
@@ -580,7 +617,8 @@
                 blockView: { loading: false, error: "", block: null, nextHash: "" },
                 txView: { loading: false, error: "", tx: null },
                 paymentView: { loading: false, error: "", txs: [] },
-                addressView: { loading: false, error: "", result: null },
+                addressView: { loading: false, error: "", result: null, accountNumbers: [], accountNumbersError: "" },
+                accountNumberView: { loading: false, error: "", result: null },
                 nodesView: { loading: false, error: "", items: [], summary: null },
                 altView: { loading: false, error: "", items: [] },
                 settings: {
@@ -1242,6 +1280,7 @@
                 if (this.route.name === "transaction") return this.loadTransactionData(token, opts.background);
                 if (this.route.name === "payment-id") return this.loadPaymentData(token, opts.background);
                 if (this.route.name === "address") return this.loadAddressData(token, opts.background);
+                if (this.route.name === "account-number") return this.loadAccountNumberData(token, opts.background);
                 if (this.route.name === "nodes") return this.loadNodesData(token, opts.background);
                 if (this.route.name === "alt-blocks") return this.loadAltBlocksData(token, opts.background);
                 return true;
@@ -1482,21 +1521,90 @@
             loadAddressData: async function (token, background) {
                 if (!background || !this.addressView.result) this.addressView.loading = true;
                 this.addressView.error = "";
+                this.addressView.accountNumbersError = "";
                 try {
-                    var result = await rpcCall(this.api, "validateaddress", { address: this.route.params.address });
+                    var address = this.route.params.address;
+                    var validationPromise = rpcCall(this.api, "validateaddress", { address: address });
+                    var accountNumbersPromise = rpcCall(this.api, "get_all_account_numbers", { address: address }).catch(function (error) {
+                        return { __error: error };
+                    });
+                    var result = await validationPromise;
                     if (token !== this.routeRequestId) return false;
+                    var accountNumberResult = await accountNumbersPromise;
+                    if (token !== this.routeRequestId) return false;
+                    var entries = [];
+                    var accountNumbersError = "";
+                    if (accountNumberResult && accountNumberResult.__error) {
+                        accountNumbersError = readableError(accountNumberResult.__error, "Could not load registered account numbers for that address.");
+                    } else {
+                        entries = ((accountNumberResult && accountNumberResult.entries) || []).map(function (entry) {
+                            return {
+                                accountNumber: normalizeAccountNumber(entry.account_number),
+                                blockHeight: coerceInteger(entry.block_height),
+                                txIndex: coerceInteger(entry.tx_index)
+                            };
+                        }).filter(function (entry) {
+                            return Boolean(entry.accountNumber);
+                        }).sort(function (left, right) {
+                            if ((right.blockHeight || 0) !== (left.blockHeight || 0)) return (right.blockHeight || 0) - (left.blockHeight || 0);
+                            return (right.txIndex || 0) - (left.txIndex || 0);
+                        });
+                    }
                     this.addressView.result = {
                         isValid: coerceBoolean(result.is_valid),
                         viewPublicKey: result.view_public_key || "",
                         spendPublicKey: result.spend_public_key || ""
                     };
+                    this.addressView.accountNumbers = entries;
+                    this.addressView.accountNumbersError = accountNumbersError;
                     this.addressView.loading = false;
                     return true;
                 } catch (error) {
                     if (token === this.routeRequestId) {
                         this.addressView.error = readableError(error, "Could not validate that address.");
                         this.addressView.result = null;
+                        this.addressView.accountNumbers = [];
+                        this.addressView.accountNumbersError = "";
                         this.addressView.loading = false;
+                    }
+                    return false;
+                }
+            },
+            loadAccountNumberData: async function (token, background) {
+                if (!background || !this.accountNumberView.result) this.accountNumberView.loading = true;
+                this.accountNumberView.error = "";
+                try {
+                    var parsed = parseAccountNumber(this.route.params.accountNumber);
+                    if (!parsed) throw new Error("Enter a valid account number like 123456-0-A.");
+                    var resolved = await rpcCall(this.api, "resolve_account_number", { account_number: parsed.value });
+                    if (token !== this.routeRequestId) return false;
+                    var address = resolved && resolved.address ? String(resolved.address).trim() : "";
+                    var accountData = {
+                        accountNumber: parsed.value,
+                        blockHeight: parsed.blockHeight,
+                        txIndex: parsed.txIndex,
+                        address: address,
+                        viewPublicKey: "",
+                        spendPublicKey: "",
+                        isValidAddress: false
+                    };
+                    if (address) {
+                        try {
+                            var validation = await rpcCall(this.api, "validateaddress", { address: address });
+                            if (token !== this.routeRequestId) return false;
+                            accountData.isValidAddress = coerceBoolean(validation.is_valid);
+                            accountData.viewPublicKey = validation.view_public_key || "";
+                            accountData.spendPublicKey = validation.spend_public_key || "";
+                        } catch (validationError) {}
+                    }
+                    this.accountNumberView.result = accountData;
+                    this.accountNumberView.loading = false;
+                    return true;
+                } catch (error) {
+                    if (token === this.routeRequestId) {
+                        this.accountNumberView.error = readableError(error, "Could not resolve that account number.");
+                        this.accountNumberView.result = null;
+                        this.accountNumberView.loading = false;
                     }
                     return false;
                 }
@@ -1716,11 +1824,15 @@
             submitSearch: async function () {
                 var query = this.searchQuery.trim();
                 if (!query) {
-                    this.showToast("Enter a block height, hash, payment ID, or address.", "error");
+                    this.showToast("Enter a block height, hash, payment ID, address, or account number.", "error");
                     return;
                 }
                 if (query.length === 95 && ADDRESS_PATTERN.test(query)) {
                     await this.goTo({ name: "address", params: { address: query } });
+                    return;
+                }
+                if (ACCOUNT_NUMBER_PATTERN.test(normalizeAccountNumber(query))) {
+                    await this.goTo({ name: "account-number", params: { accountNumber: normalizeAccountNumber(query) } });
                     return;
                 }
                 this.pageBusy = true;
