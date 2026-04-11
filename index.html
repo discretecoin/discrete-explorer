@@ -609,6 +609,30 @@
                                             <span>Decoded nonce</span>
                                             <strong>{{ transactionDecodedExtraNonce }}</strong>
                                         </div>
+                                        <div class="detail-row" v-if="txView.tx.accountRegistration">
+                                            <span>Account registration</span>
+                                            <strong>{{ txView.tx.inBlockchain ? 'Detected on-chain' : 'Pending confirmation' }}</strong>
+                                        </div>
+                                        <div class="detail-row" v-if="txView.tx.accountRegistration && txView.tx.accountRegistration.accountNumber">
+                                            <span>Account number</span>
+                                            <a class="inline-link" :href="linkTo({ name: 'account-number', params: { accountNumber: txView.tx.accountRegistration.accountNumber } })" @click.prevent="goTo({ name: 'account-number', params: { accountNumber: txView.tx.accountRegistration.accountNumber } })">{{ txView.tx.accountRegistration.accountNumber }}</a>
+                                        </div>
+                                        <div class="detail-row" v-else-if="txView.tx.accountRegistration">
+                                            <span>Account number</span>
+                                            <strong>{{ txView.tx.inBlockchain ? 'Could not determine yet' : 'Assigned after inclusion in a block' }}</strong>
+                                        </div>
+                                        <div class="detail-row" v-if="txView.tx.accountRegistration && txView.tx.accountRegistration.address">
+                                            <span>Registered address</span>
+                                            <a class="hash-string inline-link" :href="linkTo({ name: 'address', params: { address: txView.tx.accountRegistration.address } })" @click.prevent="goTo({ name: 'address', params: { address: txView.tx.accountRegistration.address } })">{{ txView.tx.accountRegistration.address }}</a>
+                                        </div>
+                                        <div class="detail-row" v-if="txView.tx.accountRegistration">
+                                            <span>Registration spend key</span>
+                                            <strong class="hash-string">{{ txView.tx.accountRegistration.spendPublicKey }}</strong>
+                                        </div>
+                                        <div class="detail-row" v-if="txView.tx.accountRegistration">
+                                            <span>Registration view key</span>
+                                            <strong class="hash-string">{{ txView.tx.accountRegistration.viewPublicKey }}</strong>
+                                        </div>
                                     </div>
                                 </article>
 

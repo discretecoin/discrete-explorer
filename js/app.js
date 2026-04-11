@@ -259,6 +259,65 @@
         return bytesToHex(bytes).slice(0, size);
     }
 
+    function parseAccountRegistrationExtra(rawExtra) {
+        var raw = normalizeHex(rawExtra);
+        if (!raw || raw.length < 130) return null;
+        var cursor = 0;
+
+        while (cursor + 2 <= raw.length) {
+            var tag = raw.slice(cursor, cursor + 2);
+
+            if (tag === "01") {
+                if (cursor + 66 > raw.length) return null;
+                cursor += 66;
+                continue;
+            }
+
+            if (tag === "02") {
+                if (cursor + 4 > raw.length) return null;
+                var nonceLength = parseInt(raw.slice(cursor + 2, cursor + 4), 16);
+                if (!Number.isFinite(nonceLength) || nonceLength < 0) return null;
+                cursor += 4 + nonceLength * 2;
+                continue;
+            }
+
+            if (tag === "04") {
+                if (cursor + 130 > raw.length) return null;
+                return {
+                    spendPublicKey: raw.slice(cursor + 2, cursor + 66),
+                    viewPublicKey: raw.slice(cursor + 66, cursor + 130)
+                };
+            }
+
+            break;
+        }
+
+        return null;
+    }
+
+    function luhnMod36Generate(input) {
+        var alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        var sum = 0;
+        var shouldDouble = true;
+
+        for (var index = String(input || "").length - 1; index >= 0; index -= 1) {
+            var character = String(input).charAt(index).toUpperCase();
+            var value = alphabet.indexOf(character);
+            if (value < 0) return "";
+
+            if (shouldDouble) {
+                value *= 2;
+                if (value >= 36) value = Math.floor(value / 36) + (value % 36);
+            }
+
+            sum += value;
+            shouldDouble = !shouldDouble;
+        }
+
+        var remainder = sum % 36;
+        return alphabet.charAt((36 - remainder) % 36);
+    }
+
     function loadScriptOnce(src) {
         if (SCRIPT_PROMISES[src]) {
             return SCRIPT_PROMISES[src];
@@ -956,6 +1015,67 @@
                 if (numeric < 86400) return "".concat(Math.floor(numeric / 3600), "h ").concat(Math.floor((numeric % 3600) / 60), "m");
                 return "".concat(Math.floor(numeric / 86400), "d ").concat(Math.floor((numeric % 86400) / 3600), "h");
             },
+            computeAccountNumber: function (blockHeight, txIndex) {
+                var normalizedHeight = coerceInteger(blockHeight);
+                var normalizedTxIndex = coerceInteger(txIndex);
+                if (normalizedHeight === null || normalizedHeight < 0 || normalizedTxIndex === null || normalizedTxIndex < 0) return "";
+                var payload = String(normalizedHeight) + String(normalizedTxIndex);
+                var checkDigit = luhnMod36Generate(payload);
+                if (!checkDigit) return "";
+                return "".concat(normalizedHeight, "-").concat(normalizedTxIndex, "-").concat(checkDigit);
+            },
+            extractBlockTransactionIndex: function (block, transactionHash) {
+                var normalizedHash = String(transactionHash || "").trim().toLowerCase();
+                if (!block || !Array.isArray(block.transactions) || !normalizedHash) return null;
+                for (var index = 0; index < block.transactions.length; index += 1) {
+                    var item = block.transactions[index];
+                    var itemHash = typeof item === "string"
+                        ? item
+                        : item && (item.hash || item.transactionHash || item.tx_hash || item.id);
+                    if (String(itemHash || "").trim().toLowerCase() === normalizedHash) return index;
+                }
+                return null;
+            },
+            enrichTransactionAccountRegistration: async function (transaction, token) {
+                if (!transaction || !transaction.accountRegistration || !transaction.inBlockchain || !transaction.blockHash) return transaction;
+
+                var registration = Object.assign({}, transaction.accountRegistration, {
+                    blockHeight: coerceInteger(transaction.blockIndex),
+                    confirmed: true
+                });
+                transaction.accountRegistration = registration;
+
+                try {
+                    var blockResult = await rpcCall(this.api, "getblockbyhash", { hash: transaction.blockHash });
+                    if (token !== this.routeRequestId) return null;
+                    var block = blockResult && blockResult.block ? blockResult.block : blockResult;
+                    var txIndex = this.extractBlockTransactionIndex(block, transaction.hash);
+                    if (txIndex === null) return transaction;
+
+                    registration.txIndex = txIndex;
+                    registration.accountNumber = this.computeAccountNumber(registration.blockHeight, txIndex);
+                    if (!registration.accountNumber) return transaction;
+
+                    try {
+                        var resolved = await rpcCall(this.api, "resolve_account_number", { account_number: registration.accountNumber });
+                        if (token !== this.routeRequestId) return null;
+                        registration.address = resolved && resolved.address ? String(resolved.address).trim() : "";
+
+                        if (registration.address) {
+                            try {
+                                var validation = await rpcCall(this.api, "validateaddress", { address: registration.address });
+                                if (token !== this.routeRequestId) return null;
+                                registration.addressKeysMatch = Boolean(
+                                    (validation.view_public_key || "") === registration.viewPublicKey &&
+                                    (validation.spend_public_key || "") === registration.spendPublicKey
+                                );
+                            } catch (validationError) {}
+                        }
+                    } catch (resolveError) {}
+                } catch (blockError) {}
+
+                return transaction;
+            },
             formatPercent: function (value) {
                 var numeric = Number(value);
                 if (!Number.isFinite(numeric)) return "--";
@@ -1482,6 +1602,23 @@
                     transaction.outputs = Array.isArray(transaction.outputs) ? transaction.outputs : [];
                     transaction.signatures = Array.isArray(transaction.signatures) ? transaction.signatures : [];
                     transaction.extra = transaction.extra && typeof transaction.extra === "object" ? transaction.extra : {};
+                    var registrationKeys = parseAccountRegistrationExtra(transaction.extra.raw || "");
+                    transaction.accountRegistration = registrationKeys ? {
+                        spendPublicKey: registrationKeys.spendPublicKey,
+                        viewPublicKey: registrationKeys.viewPublicKey,
+                        blockHeight: coerceInteger(transaction.blockIndex),
+                        txIndex: null,
+                        accountNumber: "",
+                        address: "",
+                        confirmed: Boolean(transaction.inBlockchain),
+                        addressKeysMatch: null
+                    } : null;
+                    if (transaction.accountRegistration && transaction.inBlockchain) {
+                        var enrichedTransaction = await this.enrichTransactionAccountRegistration(transaction, token);
+                        if (enrichedTransaction === null) return false;
+                        transaction = enrichedTransaction;
+                    }
+                    if (token !== this.routeRequestId) return false;
                     this.txView.tx = transaction;
                     this.txView.loading = false;
                     this.activeTxTab = "outputs";
