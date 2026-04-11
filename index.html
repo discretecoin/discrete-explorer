@@ -865,36 +865,28 @@
                         <article v-if="addressView.result && addressView.result.isValid" class="panel">
                             <div class="panel-header">
                                 <div>
-                                    <p class="eyebrow">Account numbers</p>
-                                    <h2>Registered aliases</h2>
+                                    <p class="eyebrow">Account number</p>
+                                    <h2>Registered alias</h2>
                                 </div>
                             </div>
-                            <div v-if="addressView.accountNumbersError" class="notice notice--error">{{ addressView.accountNumbersError }}</div>
-                            <div v-else-if="!addressView.accountNumbers.length" class="state-card">
+                            <div v-if="addressView.accountNumberError" class="notice notice--error">{{ addressView.accountNumberError }}</div>
+                            <div v-else-if="!addressView.accountNumber" class="state-card">
                                 <i class="fas fa-id-card"></i>
-                                <p>No registered account numbers were reported for this address.</p>
+                                <p>No canonical account number is registered for this address.</p>
                             </div>
-                            <div v-else class="table-shell">
-                                <table class="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Account number</th>
-                                            <th>Block height</th>
-                                            <th>TX index</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr v-for="entry in addressView.accountNumbers" :key="entry.accountNumber">
-                                            <td>
-                                                <a class="inline-link" :href="linkTo({ name: 'account-number', params: { accountNumber: entry.accountNumber } })" @click.prevent="goTo({ name: 'account-number', params: { accountNumber: entry.accountNumber } })">{{ entry.accountNumber }}</a>
-                                            </td>
-                                            <td>
-                                                <a class="inline-link" :href="linkTo({ name: 'block', params: { hash: String(entry.blockHeight) } })" @click.prevent="goTo({ name: 'block', params: { hash: String(entry.blockHeight) } })">{{ formatNumber(entry.blockHeight) }}</a>
-                                            </td>
-                                            <td>{{ formatNumber(entry.txIndex) }}</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                            <div v-else class="detail-list">
+                                <div class="detail-row">
+                                    <span>Account number</span>
+                                    <a class="inline-link" :href="linkTo({ name: 'account-number', params: { accountNumber: addressView.accountNumber.accountNumber } })" @click.prevent="goTo({ name: 'account-number', params: { accountNumber: addressView.accountNumber.accountNumber } })">{{ addressView.accountNumber.accountNumber }}</a>
+                                </div>
+                                <div class="detail-row" v-if="addressView.accountNumber.blockHeight !== null">
+                                    <span>Block height</span>
+                                    <a class="inline-link" :href="linkTo({ name: 'block', params: { hash: String(addressView.accountNumber.blockHeight) } })" @click.prevent="goTo({ name: 'block', params: { hash: String(addressView.accountNumber.blockHeight) } })">{{ formatNumber(addressView.accountNumber.blockHeight) }}</a>
+                                </div>
+                                <div class="detail-row" v-if="addressView.accountNumber.txIndex !== null">
+                                    <span>TX index</span>
+                                    <strong>{{ formatNumber(addressView.accountNumber.txIndex) }}</strong>
+                                </div>
                             </div>
                         </article>
                     </section>

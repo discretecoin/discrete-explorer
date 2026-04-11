@@ -676,7 +676,7 @@
                 blockView: { loading: false, error: "", block: null, nextHash: "" },
                 txView: { loading: false, error: "", tx: null },
                 paymentView: { loading: false, error: "", txs: [] },
-                addressView: { loading: false, error: "", result: null, accountNumbers: [], accountNumbersError: "" },
+                addressView: { loading: false, error: "", result: null, accountNumber: null, accountNumberError: "" },
                 accountNumberView: { loading: false, error: "", result: null },
                 nodesView: { loading: false, error: "", items: [], summary: null },
                 altView: { loading: false, error: "", items: [] },
@@ -1057,7 +1057,7 @@
                     if (!registration.accountNumber) return transaction;
 
                     try {
-                        var resolved = await rpcCall(this.api, "resolve_account_number", { account_number: registration.accountNumber });
+                        var resolved = await rpcCall(this.api, "resolveaccountnumber", { account_number: registration.accountNumber });
                         if (token !== this.routeRequestId) return null;
                         registration.address = resolved && resolved.address ? String(resolved.address).trim() : "";
 
@@ -1658,50 +1658,47 @@
             loadAddressData: async function (token, background) {
                 if (!background || !this.addressView.result) this.addressView.loading = true;
                 this.addressView.error = "";
-                this.addressView.accountNumbersError = "";
+                this.addressView.accountNumberError = "";
                 try {
                     var address = this.route.params.address;
                     var validationPromise = rpcCall(this.api, "validateaddress", { address: address });
-                    var accountNumbersPromise = rpcCall(this.api, "get_all_account_numbers", { address: address }).catch(function (error) {
+                    var accountNumberPromise = rpcCall(this.api, "getaccountnumber", { address: address }).catch(function (error) {
                         return { __error: error };
                     });
                     var result = await validationPromise;
                     if (token !== this.routeRequestId) return false;
-                    var accountNumberResult = await accountNumbersPromise;
+                    var accountNumberResult = await accountNumberPromise;
                     if (token !== this.routeRequestId) return false;
-                    var entries = [];
-                    var accountNumbersError = "";
+                    var accountNumber = null;
+                    var accountNumberError = "";
                     if (accountNumberResult && accountNumberResult.__error) {
-                        accountNumbersError = readableError(accountNumberResult.__error, "Could not load registered account numbers for that address.");
-                    } else {
-                        entries = ((accountNumberResult && accountNumberResult.entries) || []).map(function (entry) {
-                            return {
-                                accountNumber: normalizeAccountNumber(entry.account_number),
-                                blockHeight: coerceInteger(entry.block_height),
-                                txIndex: coerceInteger(entry.tx_index)
-                            };
-                        }).filter(function (entry) {
-                            return Boolean(entry.accountNumber);
-                        }).sort(function (left, right) {
-                            if ((right.blockHeight || 0) !== (left.blockHeight || 0)) return (right.blockHeight || 0) - (left.blockHeight || 0);
-                            return (right.txIndex || 0) - (left.txIndex || 0);
-                        });
+                        var lookupMessage = readableError(accountNumberResult.__error, "Could not load the canonical account number for that address.");
+                        if (!/No account number registered/i.test(lookupMessage)) {
+                            accountNumberError = lookupMessage;
+                        }
+                    } else if (accountNumberResult && accountNumberResult.account_number) {
+                        var parsedAccountNumber = parseAccountNumber(accountNumberResult.account_number);
+                        accountNumber = {
+                            accountNumber: normalizeAccountNumber(accountNumberResult.account_number),
+                            blockHeight: parsedAccountNumber ? parsedAccountNumber.blockHeight : null,
+                            txIndex: parsedAccountNumber ? parsedAccountNumber.txIndex : null
+                        };
                     }
                     this.addressView.result = {
                         isValid: coerceBoolean(result.is_valid),
                         viewPublicKey: result.view_public_key || "",
                         spendPublicKey: result.spend_public_key || ""
                     };
-                    this.addressView.accountNumbers = entries;
-                    this.addressView.accountNumbersError = accountNumbersError;
+                    this.addressView.accountNumber = accountNumber;
+                    this.addressView.accountNumberError = accountNumberError;
                     this.addressView.loading = false;
                     return true;
                 } catch (error) {
                     if (token === this.routeRequestId) {
                         this.addressView.error = readableError(error, "Could not validate that address.");
                         this.addressView.result = null;
-                        this.addressView.accountNumbers = [];
-                        this.addressView.accountNumbersError = "";
+                        this.addressView.accountNumber = null;
+                        this.addressView.accountNumberError = "";
                         this.addressView.loading = false;
                     }
                     return false;
@@ -1713,7 +1710,7 @@
                 try {
                     var parsed = parseAccountNumber(this.route.params.accountNumber);
                     if (!parsed) throw new Error("Enter a valid account number like 123456-0-A.");
-                    var resolved = await rpcCall(this.api, "resolve_account_number", { account_number: parsed.value });
+                    var resolved = await rpcCall(this.api, "resolveaccountnumber", { account_number: parsed.value });
                     if (token !== this.routeRequestId) return false;
                     var address = resolved && resolved.address ? String(resolved.address).trim() : "";
                     var accountData = {
