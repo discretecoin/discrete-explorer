@@ -552,7 +552,7 @@
                 toolNav: [
                     { name: "broadcast-transaction", label: "Broadcast tx", icon: "fa-broadcast-tower", description: "Submit raw transaction hex to the network." },
                     { name: "check-funds", label: "Check proof", icon: "fa-piggy-bank", description: "Verify a reserve proof and reported balance." },
-                    { name: "check-payment", label: "Check payment", icon: "fa-key", description: "Verify received outputs for a transaction." },
+                    { name: "check-payment", label: "Check payment", icon: "fa-receipt", description: "Verify received outputs for a transaction." },
                     { name: "validate-address", label: "Validate address", icon: "fa-check-circle", description: "Validate an address and inspect public keys." },
                     { name: "verify-message", label: "Verify message", icon: "fa-envelope-open-text", description: "Verify a signed message against an address." },
                     { name: "amount-converter", label: "Amount converter", icon: "fa-exchange-alt", description: "Convert atomic units to readable KRB amounts." },
