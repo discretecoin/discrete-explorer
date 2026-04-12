@@ -821,8 +821,8 @@
                                     </button>
                                 </div>
                             </div>
-                            <h1 class="page-title hash-string">{{ route.params.address }}</h1>
-                            <p class="page-subtitle">Address validation and public-key inspection.</p>
+                            <h1 class="page-title page-title--hash hash-string">{{ route.params.address }}</h1>
+                            <p class="page-subtitle">Address validation, public-key inspection, and registered account-number lookup.</p>
                         </div>
 
                         <div v-if="addressView.loading" class="state-card">
@@ -902,7 +902,7 @@
                                     </button>
                                 </div>
                             </div>
-                            <h1 class="page-title hash-string">{{ route.params.accountNumber }}</h1>
+                            <h1 class="page-title page-title--hash hash-string">{{ route.params.accountNumber }}</h1>
                             <p class="page-subtitle">Resolve a registered account number to its Karbo address and public keys.</p>
                         </div>
 
