@@ -1,4 +1,5 @@
 const http = require("node:http");
+const https = require("node:https");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -73,15 +74,82 @@ function sendFile(request, response, filePath, statusCode) {
     });
 }
 
+function isLoopbackTarget(targetUrl) {
+    try {
+        const parsed = new URL(targetUrl);
+        return (parsed.protocol === "http:" || parsed.protocol === "https:")
+            && /^(localhost|127\.0\.0\.1)$/i.test(parsed.hostname || "");
+    } catch (error) {
+        return false;
+    }
+}
+
+function proxyToTarget(request, response, targetUrl) {
+    if (!isLoopbackTarget(targetUrl)) {
+        response.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+        response.end("Invalid proxy target");
+        return;
+    }
+
+    const parsedTarget = new URL(targetUrl);
+    const transport = parsedTarget.protocol === "https:" ? https : http;
+    const headers = {};
+
+    ["accept", "content-type", "content-length"].forEach(function (headerName) {
+        if (request.headers[headerName]) headers[headerName] = request.headers[headerName];
+    });
+
+    const upstreamRequest = transport.request(parsedTarget, {
+        method: request.method,
+        headers: headers
+    }, function (upstreamResponse) {
+        response.writeHead(upstreamResponse.statusCode || 502, {
+            "Content-Type": upstreamResponse.headers["content-type"] || "application/octet-stream",
+            "Cache-Control": "no-store"
+        });
+
+        if (request.method === "HEAD") {
+            response.end();
+            upstreamResponse.resume();
+            return;
+        }
+
+        upstreamResponse.pipe(response);
+    });
+
+    upstreamRequest.on("error", function (error) {
+        response.writeHead(502, { "Content-Type": "text/plain; charset=utf-8" });
+        response.end("Proxy request failed: " + error.message);
+    });
+
+    if (request.method === "GET" || request.method === "HEAD") {
+        upstreamRequest.end();
+        return;
+    }
+
+    request.pipe(upstreamRequest);
+}
+
 const server = http.createServer(function (request, response) {
+    const requestUrl = new URL(request.url || "/", "http://" + (request.headers.host || "localhost"));
+    const pathname = requestUrl.pathname || "/";
+
+    if (pathname === "/__proxy__") {
+        const target = requestUrl.searchParams.get("target");
+        if (!target) {
+            response.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+            response.end("Missing proxy target");
+            return;
+        }
+        proxyToTarget(request, response, target);
+        return;
+    }
+
     if (request.method !== "GET" && request.method !== "HEAD") {
         response.writeHead(405, { "Content-Type": "text/plain; charset=utf-8" });
         response.end("Method not allowed");
         return;
     }
-
-    const requestUrl = new URL(request.url || "/", "http://" + (request.headers.host || "localhost"));
-    const pathname = requestUrl.pathname || "/";
 
     if (isSpaRoute(pathname)) {
         sendFile(request, response, path.join(rootDir, "index.html"), 200);

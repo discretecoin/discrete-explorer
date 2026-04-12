@@ -70,6 +70,30 @@
         }
     }
 
+    function isLocalDevOrigin() {
+        return typeof window !== "undefined"
+            && window.location
+            && /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname || "");
+    }
+
+    function isLoopbackApi(url) {
+        try {
+            var parsed = new URL(normalizeApiUrl(url));
+            return /^(localhost|127\.0\.0\.1)$/i.test(parsed.hostname || "");
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function buildApiRequestUrl(apiUrl, pathname) {
+        var normalizedApi = normalizeApiUrl(apiUrl);
+        var normalizedPath = String(pathname || "");
+        if (isLocalDevOrigin() && isLoopbackApi(normalizedApi)) {
+            return "/__proxy__?target=".concat(encodeURIComponent(normalizedApi + normalizedPath));
+        }
+        return "".concat(normalizedApi).concat(normalizedPath);
+    }
+
     function getPreferredTheme() {
         var storedTheme = safeStorageGet(STORAGE_THEME_KEY);
         if (storedTheme === "dark" || storedTheme === "light") return storedTheme;
@@ -571,21 +595,21 @@
     }
 
     async function fetchNodeInfo(apiUrl) {
-        return fetchJson("".concat(normalizeApiUrl(apiUrl), "/getinfo"), {
+        return fetchJson(buildApiRequestUrl(apiUrl, "/getinfo"), {
             headers: { Accept: "application/json" },
             timeoutMs: 5000
         });
     }
 
     async function fetchNodeFee(apiUrl) {
-        return fetchJson("".concat(normalizeApiUrl(apiUrl), "/feeaddress"), {
+        return fetchJson(buildApiRequestUrl(apiUrl, "/feeaddress"), {
             headers: { Accept: "application/json" },
             timeoutMs: 3500
         });
     }
 
     async function sendRawTransaction(apiUrl, transactionHex) {
-        return fetchJson("".concat(normalizeApiUrl(apiUrl), "/sendrawtransaction"), {
+        return fetchJson(buildApiRequestUrl(apiUrl, "/sendrawtransaction"), {
             method: "POST",
             headers: {
                 Accept: "application/json",
@@ -598,7 +622,7 @@
     }
 
     async function rpcCall(apiUrl, method, params) {
-        var payload = await fetchJson("".concat(normalizeApiUrl(apiUrl), "/json_rpc"), {
+        var payload = await fetchJson(buildApiRequestUrl(apiUrl, "/json_rpc"), {
             method: "POST",
             headers: { Accept: "application/json", "Content-Type": "application/json" },
             body: JSON.stringify({ jsonrpc: "2.0", id: "karbo_explorer", method: method, params: params || {} })
