@@ -451,7 +451,7 @@
                                         <div class="detail-row"><span>Version</span><strong>{{ blockView.block.majorVersion }}.{{ blockView.block.minorVersion }}</strong></div>
                                         <div class="detail-row"><span>Nonce</span><strong>{{ formatNumber(blockView.block.nonce) }}</strong></div>
                                         <div class="detail-row"><span>Orphaned</span><strong>{{ blockView.block.isOrphaned ? 'Yes' : 'No' }}</strong></div>
-                                        <div class="detail-row"><span>Total coins</span><strong>{{ formatCoins(blockView.block.alreadyGeneratedCoins) }}</strong></div>
+                                        <div class="detail-row"><span>Total coins</span><strong>{{ formatCoins(correctOverflow(blockView.block.alreadyGeneratedCoins)) }}</strong></div>
                                         <div class="detail-row"><span>Total transactions</span><strong>{{ formatNumber(blockView.block.alreadyGeneratedTransactions) }}</strong></div>
                                         <div class="detail-row">
                                             <span>Signature</span>

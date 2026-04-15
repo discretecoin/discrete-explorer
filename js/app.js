@@ -187,6 +187,17 @@
         return rendered;
     }
 
+    function correctOverflow(value) {
+        var num = Number(value);
+        if (!Number.isFinite(num)) return String(value);
+        const MAX_UINT64 = BigInt("18446744073709551616"); // 2^64
+        num = BigInt(value);
+        if (num < 0) {
+            num += MAX_UINT64;  // Correct the negative overflow
+        }
+        return String(num); // Return as string to avoid BigInt issues in JSON
+    }
+
     function bytesToHex(bytes) {
         if (!bytes || typeof bytes.length !== "number") return "";
         var parts = [];
@@ -859,6 +870,9 @@
                     normalizedIncludeSymbol = precision;
                 }
                 return renderAtomicCoins(value, normalizedPrecision, normalizedIncludeSymbol, true);
+            },
+            correctOverflow: function (value) {
+                return correctOverflow(value);
             },
             formatBytes: function (value) {
                 var numeric = Number(value);
