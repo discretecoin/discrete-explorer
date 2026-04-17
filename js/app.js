@@ -133,6 +133,12 @@
         };
     }
 
+    function isValidAccountNumber(value) {
+        var parsed = parseAccountNumber(value);
+        if (!parsed) return false;
+        return luhnMod36Generate(String(parsed.blockHeight) + String(parsed.txIndex)) === parsed.checkDigit;
+    }
+
     function coerceInteger(value) {
         if (value === null || value === undefined || value === "") return null;
         if (typeof value === "number") return Number.isFinite(value) ? Math.trunc(value) : null;
@@ -1990,6 +1996,10 @@
                     return;
                 }
                 if (ACCOUNT_NUMBER_PATTERN.test(normalizeAccountNumber(query))) {
+                    if (!isValidAccountNumber(query)) {
+                        this.showToast("Invalid account number.", "error");
+                        return;
+                    }
                     await this.goTo({ name: "account-number", params: { accountNumber: normalizeAccountNumber(query) } });
                     return;
                 }
