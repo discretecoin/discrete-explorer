@@ -657,6 +657,12 @@ html[data-theme="light"] .searchbar-submit:hover {
     display: block;
 }
 
+.page-head-stat {
+    flex-shrink: 0;
+    min-width: 6rem;
+    text-align: center;
+}
+
 .page-head-top {
     align-items: start;
     display: flex;

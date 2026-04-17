@@ -918,6 +918,10 @@
                                 <h1 class="page-title">Competing chain tips</h1>
                                 <p class="page-subtitle">Alternative blocks currently visible from the connected node.</p>
                             </div>
+                            <article v-if="!altView.loading && !altView.error" class="metric-card page-head-stat">
+                                <span class="metric-label">Alt blocks</span>
+                                <strong>{{ formatNumber(altView.items.length) }}</strong>
+                            </article>
                         </div>
 
                         <div v-if="altView.loading" class="state-card">
