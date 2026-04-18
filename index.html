@@ -48,7 +48,7 @@
 
                         <form class="searchbar searchbar--compact" @submit.prevent="submitSearch">
                             <i class="fas fa-search searchbar-icon" aria-hidden="true"></i>
-                            <input v-model.trim="searchQuery" type="search" spellcheck="false" autocomplete="off" placeholder="Search by block height, block hash, tx hash, payment ID, or address">
+                            <input v-model.trim="searchQuery" type="search" spellcheck="false" autocomplete="off" placeholder="Search by block height, block hash, tx hash, payment ID, address, or account number">
                             <button type="submit" class="searchbar-submit">Go</button>
                         </form>
 
@@ -609,6 +609,30 @@
                                             <span>Decoded nonce</span>
                                             <strong>{{ transactionDecodedExtraNonce }}</strong>
                                         </div>
+                                        <div class="detail-row" v-if="txView.tx.accountRegistration">
+                                            <span>Account registration</span>
+                                            <strong>{{ txView.tx.inBlockchain ? 'Detected on-chain' : 'Pending confirmation' }}</strong>
+                                        </div>
+                                        <div class="detail-row" v-if="txView.tx.accountRegistration && txView.tx.accountRegistration.accountNumber">
+                                            <span>Account number</span>
+                                            <a class="inline-link" :href="linkTo({ name: 'account-number', params: { accountNumber: txView.tx.accountRegistration.accountNumber } })" @click.prevent="goTo({ name: 'account-number', params: { accountNumber: txView.tx.accountRegistration.accountNumber } })">{{ txView.tx.accountRegistration.accountNumber }}</a>
+                                        </div>
+                                        <div class="detail-row" v-else-if="txView.tx.accountRegistration">
+                                            <span>Account number</span>
+                                            <strong>{{ txView.tx.inBlockchain ? 'Could not determine yet' : 'Assigned after inclusion in a block' }}</strong>
+                                        </div>
+                                        <div class="detail-row" v-if="txView.tx.accountRegistration && txView.tx.accountRegistration.address">
+                                            <span>Registered address</span>
+                                            <a class="hash-string inline-link" :href="linkTo({ name: 'address', params: { address: txView.tx.accountRegistration.address } })" @click.prevent="goTo({ name: 'address', params: { address: txView.tx.accountRegistration.address } })">{{ txView.tx.accountRegistration.address }}</a>
+                                        </div>
+                                        <div class="detail-row" v-if="txView.tx.accountRegistration">
+                                            <span>Registration spend key</span>
+                                            <strong class="hash-string">{{ txView.tx.accountRegistration.spendPublicKey }}</strong>
+                                        </div>
+                                        <div class="detail-row" v-if="txView.tx.accountRegistration">
+                                            <span>Registration view key</span>
+                                            <strong class="hash-string">{{ txView.tx.accountRegistration.viewPublicKey }}</strong>
+                                        </div>
                                     </div>
                                 </article>
 
@@ -797,8 +821,8 @@
                                     </button>
                                 </div>
                             </div>
-                            <h1 class="page-title hash-string">{{ route.params.address }}</h1>
-                            <p class="page-subtitle">Address validation and public-key inspection.</p>
+                            <h1 class="page-title page-title--hash hash-string">{{ route.params.address }}</h1>
+                            <p class="page-subtitle">Address validation, public-key inspection, and registered account-number lookup.</p>
                         </div>
 
                         <div v-if="addressView.loading" class="state-card">
@@ -837,6 +861,107 @@
                                 <p class="panel-copy">This explorer cannot show a Karbo address balance or its full history. CryptoNote privacy relies on one-time destination keys and ring signatures, so observers cannot map funds back to a public address the way they can on transparent chains.</p>
                             </article>
                         </div>
+
+                        <article v-if="addressView.result && addressView.result.isValid" class="panel">
+                            <div class="panel-header">
+                                <div>
+                                    <p class="eyebrow">Account number</p>
+                                    <h2>Registered alias</h2>
+                                </div>
+                            </div>
+                            <div v-if="addressView.accountNumberError" class="notice notice--error">{{ addressView.accountNumberError }}</div>
+                            <div v-else-if="!addressView.accountNumber" class="state-card">
+                                <i class="fas fa-id-card"></i>
+                                <p>No canonical account number is registered for this address.</p>
+                            </div>
+                            <div v-else class="detail-list">
+                                <div class="detail-row">
+                                    <span>Account number</span>
+                                    <a class="inline-link" :href="linkTo({ name: 'account-number', params: { accountNumber: addressView.accountNumber.accountNumber } })" @click.prevent="goTo({ name: 'account-number', params: { accountNumber: addressView.accountNumber.accountNumber } })">{{ addressView.accountNumber.accountNumber }}</a>
+                                </div>
+                                <div class="detail-row" v-if="addressView.accountNumber.blockHeight !== null">
+                                    <span>Block height</span>
+                                    <a class="inline-link" :href="linkTo({ name: 'block', params: { hash: String(addressView.accountNumber.blockHeight) } })" @click.prevent="goTo({ name: 'block', params: { hash: String(addressView.accountNumber.blockHeight) } })">{{ formatNumber(addressView.accountNumber.blockHeight) }}</a>
+                                </div>
+                                <div class="detail-row" v-if="addressView.accountNumber.txIndex !== null">
+                                    <span>TX index</span>
+                                    <strong>{{ formatNumber(addressView.accountNumber.txIndex) }}</strong>
+                                </div>
+                            </div>
+                        </article>
+                    </section>
+
+                    <section v-else-if="route.name === 'account-number'" class="page-section">
+                        <div class="page-head page-head--detail">
+                            <div class="page-head-top">
+                                <p class="eyebrow">Account number</p>
+                                <div class="page-actions">
+                                    <button type="button" class="button button--ghost button--small" @click="copyText(route.params.accountNumber, 'Account number copied')">
+                                        <i class="fas fa-copy"></i>
+                                        Copy
+                                    </button>
+                                </div>
+                            </div>
+                            <h1 class="page-title page-title--hash hash-string">{{ route.params.accountNumber }}</h1>
+                            <p class="page-subtitle">Resolve a registered account number to its Karbo address and public keys.</p>
+                        </div>
+
+                        <div v-if="accountNumberView.loading" class="state-card">
+                            <div class="spinner"></div>
+                            <p>Resolving account number...</p>
+                        </div>
+                        <div v-else-if="accountNumberView.error" class="state-card state-card--error">
+                            <i class="fas fa-triangle-exclamation"></i>
+                            <p>{{ accountNumberView.error }}</p>
+                        </div>
+                        <template v-else-if="accountNumberView.result">
+                            <div class="metric-grid metric-grid--compact">
+                                <article class="metric-card">
+                                    <span class="metric-label">Block height</span>
+                                    <strong>
+                                        <a class="inline-link" :href="linkTo({ name: 'block', params: { hash: String(accountNumberView.result.blockHeight) } })" @click.prevent="goTo({ name: 'block', params: { hash: String(accountNumberView.result.blockHeight) } })">{{ formatNumber(accountNumberView.result.blockHeight) }}</a>
+                                    </strong>
+                                    <span class="metric-meta">Registration block</span>
+                                </article>
+                                <article class="metric-card">
+                                    <span class="metric-label">Transaction index</span>
+                                    <strong>{{ formatNumber(accountNumberView.result.txIndex) }}</strong>
+                                    <span class="metric-meta">Within the registration block</span>
+                                </article>
+                            </div>
+
+                            <div class="panel-grid">
+                                <article class="panel">
+                                    <div class="panel-header">
+                                        <div>
+                                            <p class="eyebrow">Resolution</p>
+                                            <h2>Registered address</h2>
+                                        </div>
+                                    </div>
+                                    <div class="detail-list">
+                                        <div class="detail-row">
+                                            <span>Address</span>
+                                            <template v-if="accountNumberView.result.address">
+                                                <a class="hash-string inline-link" :href="linkTo({ name: 'address', params: { address: accountNumberView.result.address } })" @click.prevent="goTo({ name: 'address', params: { address: accountNumberView.result.address } })">{{ accountNumberView.result.address }}</a>
+                                            </template>
+                                            <strong v-else>--</strong>
+                                        </div>
+                                        <div class="detail-row"><span>Spend public key</span><strong class="hash-string">{{ accountNumberView.result.spendPublicKey || '--' }}</strong></div>
+                                        <div class="detail-row"><span>View public key</span><strong class="hash-string">{{ accountNumberView.result.viewPublicKey || '--' }}</strong></div>
+                                    </div>
+                                </article>
+
+                                <article class="panel">
+                                    <div class="panel-header">
+                                        <div>
+                                            <p class="eyebrow">Lookup note</p>
+                                            <h2>What this identifier means</h2>
+                                        </div>
+                                    </div>
+                                    <p class="panel-copy">Account numbers are compact aliases registered on-chain. This page resolves the alias back to the full Karbo address and shows the public keys advertised by the connected node.</p>
+                                </article>
+                            </div>
+                        </template>
                     </section>
 
                     <section v-else-if="route.name === 'nodes'" class="page-section">
@@ -1367,6 +1492,7 @@
                                     <div class="detail-row"><span>Transaction</span><strong class="hash-string">/transaction/&lt;hash&gt;</strong></div>
                                     <div class="detail-row"><span>Payment ID</span><strong class="hash-string">/payment-id/&lt;hash&gt;</strong></div>
                                     <div class="detail-row"><span>Address</span><strong class="hash-string">/address/&lt;address&gt;</strong></div>
+                                    <div class="detail-row"><span>Account number</span><strong class="hash-string">/account/&lt;number&gt;</strong></div>
                                 </div>
                             </article>
                         </div>

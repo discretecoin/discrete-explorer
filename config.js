@@ -10,3 +10,4 @@ var recentConfirmedTxBlockRange = 1000;
 var avgHashrateBaselineHeight = 700000;
 var avgHashrateBaselineCumulativeDifficulty = "5917824089773719";
 var addressPattern = new RegExp("^K[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{94}$");
+var accountNumberPattern = new RegExp("^\\d+-\\d+-[0-9A-Za-z]$");

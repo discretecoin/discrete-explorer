@@ -19,6 +19,9 @@
     var ADDRESS_PATTERN = window.addressPattern instanceof RegExp
         ? window.addressPattern
         : /^K[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{94}$/;
+    var ACCOUNT_NUMBER_PATTERN = window.accountNumberPattern instanceof RegExp
+        ? window.accountNumberPattern
+        : /^\d+-\d+-[0-9A-Za-z]$/;
     var SIMPLE_ROUTE_NAMES = [
         "nodes",
         "alt-blocks",
@@ -67,6 +70,30 @@
         }
     }
 
+    function isLocalDevOrigin() {
+        return typeof window !== "undefined"
+            && window.location
+            && /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname || "");
+    }
+
+    function isLoopbackApi(url) {
+        try {
+            var parsed = new URL(normalizeApiUrl(url));
+            return /^(localhost|127\.0\.0\.1)$/i.test(parsed.hostname || "");
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function buildApiRequestUrl(apiUrl, pathname) {
+        var normalizedApi = normalizeApiUrl(apiUrl);
+        var normalizedPath = String(pathname || "");
+        if (isLocalDevOrigin() && isLoopbackApi(normalizedApi)) {
+            return "/__proxy__?target=".concat(encodeURIComponent(normalizedApi + normalizedPath));
+        }
+        return "".concat(normalizedApi).concat(normalizedPath);
+    }
+
     function getPreferredTheme() {
         var storedTheme = safeStorageGet(STORAGE_THEME_KEY);
         if (storedTheme === "dark" || storedTheme === "light") return storedTheme;
@@ -81,6 +108,35 @@
         var normalized = normalizeHex(value);
         var exactLength = typeof length === "number" ? "{".concat(length, "}") : "+";
         return new RegExp("^[0-9a-f]".concat(exactLength, "$")).test(normalized);
+    }
+
+    function normalizeAccountNumber(value) {
+        var raw = String(value || "").trim();
+        if (!raw) return "";
+        var parts = raw.split("-");
+        if (parts.length !== 3) return raw;
+        return "".concat(parts[0], "-").concat(parts[1], "-").concat(String(parts[2] || "").toUpperCase());
+    }
+
+    function parseAccountNumber(value) {
+        var normalized = normalizeAccountNumber(value);
+        if (!ACCOUNT_NUMBER_PATTERN.test(normalized)) return null;
+        var parts = normalized.split("-");
+        var blockHeight = coerceInteger(parts[0]);
+        var txIndex = coerceInteger(parts[1]);
+        if (blockHeight === null || blockHeight < 0 || txIndex === null || txIndex < 0) return null;
+        return {
+            value: normalized,
+            blockHeight: blockHeight,
+            txIndex: txIndex,
+            checkDigit: parts[2]
+        };
+    }
+
+    function isValidAccountNumber(value) {
+        var parsed = parseAccountNumber(value);
+        if (!parsed) return false;
+        return luhnMod36Generate(String(parsed.blockHeight) + String(parsed.txIndex)) === parsed.checkDigit;
     }
 
     function coerceInteger(value) {
@@ -244,6 +300,65 @@
         return bytesToHex(bytes).slice(0, size);
     }
 
+    function parseAccountRegistrationExtra(rawExtra) {
+        var raw = normalizeHex(rawExtra);
+        if (!raw || raw.length < 130) return null;
+        var cursor = 0;
+
+        while (cursor + 2 <= raw.length) {
+            var tag = raw.slice(cursor, cursor + 2);
+
+            if (tag === "01") {
+                if (cursor + 66 > raw.length) return null;
+                cursor += 66;
+                continue;
+            }
+
+            if (tag === "02") {
+                if (cursor + 4 > raw.length) return null;
+                var nonceLength = parseInt(raw.slice(cursor + 2, cursor + 4), 16);
+                if (!Number.isFinite(nonceLength) || nonceLength < 0) return null;
+                cursor += 4 + nonceLength * 2;
+                continue;
+            }
+
+            if (tag === "04") {
+                if (cursor + 130 > raw.length) return null;
+                return {
+                    spendPublicKey: raw.slice(cursor + 2, cursor + 66),
+                    viewPublicKey: raw.slice(cursor + 66, cursor + 130)
+                };
+            }
+
+            break;
+        }
+
+        return null;
+    }
+
+    function luhnMod36Generate(input) {
+        var alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        var sum = 0;
+        var shouldDouble = true;
+
+        for (var index = String(input || "").length - 1; index >= 0; index -= 1) {
+            var character = String(input).charAt(index).toUpperCase();
+            var value = alphabet.indexOf(character);
+            if (value < 0) return "";
+
+            if (shouldDouble) {
+                value *= 2;
+                if (value >= 36) value = Math.floor(value / 36) + (value % 36);
+            }
+
+            sum += value;
+            shouldDouble = !shouldDouble;
+        }
+
+        var remainder = sum % 36;
+        return alphabet.charAt((36 - remainder) % 36);
+    }
+
     function loadScriptOnce(src) {
         if (SCRIPT_PROMISES[src]) {
             return SCRIPT_PROMISES[src];
@@ -380,6 +495,11 @@
             normalized.params.address = String(params.address).trim();
             return normalized;
         }
+        if (name === "account-number" && params.accountNumber) {
+            normalized.name = "account-number";
+            normalized.params.accountNumber = normalizeAccountNumber(params.accountNumber);
+            return normalized;
+        }
         return normalized;
     }
 
@@ -393,6 +513,7 @@
         }
         if (isSimpleRouteName(normalized.name)) return "/".concat(normalized.name);
         if (normalized.name === "address") return "/address/".concat(encodeURIComponent(normalized.params.address));
+        if (normalized.name === "account-number") return "/account/".concat(encodeURIComponent(normalized.params.accountNumber));
         var path = "/".concat(normalized.name, "/").concat(encodeURIComponent(normalized.params.hash));
         if (normalized.name === "transaction" && normalized.query.highlight) query.set("highlight", normalized.query.highlight);
         var search = query.toString();
@@ -403,10 +524,14 @@
         var params = new URLSearchParams(locationObject.search || "");
         var hash = String(locationObject.hash || "").replace(/^#/, "").toLowerCase();
         var value = params.get("hash");
+        var address = params.get("address");
         if (value) {
             if (hash === "block") return normalizeRoute({ name: "block", params: { hash: value } });
             if (hash === "transaction") return normalizeRoute({ name: "transaction", params: { hash: value } });
             if (hash === "payment-id" || hash === "payment_id") return normalizeRoute({ name: "payment-id", params: { hash: value } });
+        }
+        if (address && hash === "address") {
+            return normalizeRoute({ name: "address", params: { address: address } });
         }
         if (hash === "nodes") return normalizeRoute({ name: "nodes" });
         if (hash === "alt-blocks" || hash === "alt_blocks") return normalizeRoute({ name: "alt-blocks" });
@@ -433,6 +558,7 @@
         if (isSimpleRouteName(segments[0])) return normalizeRoute({ name: segments[0] });
         if ((segments[0] === "block" || segments[0] === "transaction" || segments[0] === "payment-id") && segments[1]) return normalizeRoute({ name: segments[0], params: { hash: segments[1] }, query: query });
         if (segments[0] === "address" && segments[1]) return normalizeRoute({ name: "address", params: { address: segments[1] } });
+        if ((segments[0] === "account" || segments[0] === "account-number") && segments[1]) return normalizeRoute({ name: "account-number", params: { accountNumber: segments[1] } });
         return normalizeRoute({ name: "home", query: query });
     }
 
@@ -486,21 +612,21 @@
     }
 
     async function fetchNodeInfo(apiUrl) {
-        return fetchJson("".concat(normalizeApiUrl(apiUrl), "/getinfo"), {
+        return fetchJson(buildApiRequestUrl(apiUrl, "/getinfo"), {
             headers: { Accept: "application/json" },
             timeoutMs: 5000
         });
     }
 
     async function fetchNodeFee(apiUrl) {
-        return fetchJson("".concat(normalizeApiUrl(apiUrl), "/feeaddress"), {
+        return fetchJson(buildApiRequestUrl(apiUrl, "/feeaddress"), {
             headers: { Accept: "application/json" },
             timeoutMs: 3500
         });
     }
 
     async function sendRawTransaction(apiUrl, transactionHex) {
-        return fetchJson("".concat(normalizeApiUrl(apiUrl), "/sendrawtransaction"), {
+        return fetchJson(buildApiRequestUrl(apiUrl, "/sendrawtransaction"), {
             method: "POST",
             headers: {
                 Accept: "application/json",
@@ -513,7 +639,7 @@
     }
 
     async function rpcCall(apiUrl, method, params) {
-        var payload = await fetchJson("".concat(normalizeApiUrl(apiUrl), "/json_rpc"), {
+        var payload = await fetchJson(buildApiRequestUrl(apiUrl, "/json_rpc"), {
             method: "POST",
             headers: { Accept: "application/json", "Content-Type": "application/json" },
             body: JSON.stringify({ jsonrpc: "2.0", id: "karbo_explorer", method: method, params: params || {} })
@@ -591,7 +717,8 @@
                 blockView: { loading: false, error: "", block: null, nextHash: "" },
                 txView: { loading: false, error: "", tx: null },
                 paymentView: { loading: false, error: "", txs: [] },
-                addressView: { loading: false, error: "", result: null },
+                addressView: { loading: false, error: "", result: null, accountNumber: null, accountNumberError: "" },
+                accountNumberView: { loading: false, error: "", result: null },
                 nodesView: { loading: false, error: "", items: [], summary: null },
                 altView: { loading: false, error: "", items: [] },
                 settings: {
@@ -932,6 +1059,67 @@
                 if (numeric < 86400) return "".concat(Math.floor(numeric / 3600), "h ").concat(Math.floor((numeric % 3600) / 60), "m");
                 return "".concat(Math.floor(numeric / 86400), "d ").concat(Math.floor((numeric % 86400) / 3600), "h");
             },
+            computeAccountNumber: function (blockHeight, txIndex) {
+                var normalizedHeight = coerceInteger(blockHeight);
+                var normalizedTxIndex = coerceInteger(txIndex);
+                if (normalizedHeight === null || normalizedHeight < 0 || normalizedTxIndex === null || normalizedTxIndex < 0) return "";
+                var payload = String(normalizedHeight) + String(normalizedTxIndex);
+                var checkDigit = luhnMod36Generate(payload);
+                if (!checkDigit) return "";
+                return "".concat(normalizedHeight, "-").concat(normalizedTxIndex, "-").concat(checkDigit);
+            },
+            extractBlockTransactionIndex: function (block, transactionHash) {
+                var normalizedHash = String(transactionHash || "").trim().toLowerCase();
+                if (!block || !Array.isArray(block.transactions) || !normalizedHash) return null;
+                for (var index = 0; index < block.transactions.length; index += 1) {
+                    var item = block.transactions[index];
+                    var itemHash = typeof item === "string"
+                        ? item
+                        : item && (item.hash || item.transactionHash || item.tx_hash || item.id);
+                    if (String(itemHash || "").trim().toLowerCase() === normalizedHash) return index;
+                }
+                return null;
+            },
+            enrichTransactionAccountRegistration: async function (transaction, token) {
+                if (!transaction || !transaction.accountRegistration || !transaction.inBlockchain || !transaction.blockHash) return transaction;
+
+                var registration = Object.assign({}, transaction.accountRegistration, {
+                    blockHeight: coerceInteger(transaction.blockIndex),
+                    confirmed: true
+                });
+                transaction.accountRegistration = registration;
+
+                try {
+                    var blockResult = await rpcCall(this.api, "getblockbyhash", { hash: transaction.blockHash });
+                    if (token !== this.routeRequestId) return null;
+                    var block = blockResult && blockResult.block ? blockResult.block : blockResult;
+                    var txIndex = this.extractBlockTransactionIndex(block, transaction.hash);
+                    if (txIndex === null) return transaction;
+
+                    registration.txIndex = txIndex;
+                    registration.accountNumber = this.computeAccountNumber(registration.blockHeight, txIndex);
+                    if (!registration.accountNumber) return transaction;
+
+                    try {
+                        var resolved = await rpcCall(this.api, "resolveaccountnumber", { account_number: registration.accountNumber });
+                        if (token !== this.routeRequestId) return null;
+                        registration.address = resolved && resolved.address ? String(resolved.address).trim() : "";
+
+                        if (registration.address) {
+                            try {
+                                var validation = await rpcCall(this.api, "validateaddress", { address: registration.address });
+                                if (token !== this.routeRequestId) return null;
+                                registration.addressKeysMatch = Boolean(
+                                    (validation.view_public_key || "") === registration.viewPublicKey &&
+                                    (validation.spend_public_key || "") === registration.spendPublicKey
+                                );
+                            } catch (validationError) {}
+                        }
+                    } catch (resolveError) {}
+                } catch (blockError) {}
+
+                return transaction;
+            },
             formatPercent: function (value) {
                 var numeric = Number(value);
                 if (!Number.isFinite(numeric)) return "--";
@@ -1256,6 +1444,7 @@
                 if (this.route.name === "transaction") return this.loadTransactionData(token, opts.background);
                 if (this.route.name === "payment-id") return this.loadPaymentData(token, opts.background);
                 if (this.route.name === "address") return this.loadAddressData(token, opts.background);
+                if (this.route.name === "account-number") return this.loadAccountNumberData(token, opts.background);
                 if (this.route.name === "nodes") return this.loadNodesData(token, opts.background);
                 if (this.route.name === "alt-blocks") return this.loadAltBlocksData(token, opts.background);
                 return true;
@@ -1457,6 +1646,23 @@
                     transaction.outputs = Array.isArray(transaction.outputs) ? transaction.outputs : [];
                     transaction.signatures = Array.isArray(transaction.signatures) ? transaction.signatures : [];
                     transaction.extra = transaction.extra && typeof transaction.extra === "object" ? transaction.extra : {};
+                    var registrationKeys = parseAccountRegistrationExtra(transaction.extra.raw || "");
+                    transaction.accountRegistration = registrationKeys ? {
+                        spendPublicKey: registrationKeys.spendPublicKey,
+                        viewPublicKey: registrationKeys.viewPublicKey,
+                        blockHeight: coerceInteger(transaction.blockIndex),
+                        txIndex: null,
+                        accountNumber: "",
+                        address: "",
+                        confirmed: Boolean(transaction.inBlockchain),
+                        addressKeysMatch: null
+                    } : null;
+                    if (transaction.accountRegistration && transaction.inBlockchain) {
+                        var enrichedTransaction = await this.enrichTransactionAccountRegistration(transaction, token);
+                        if (enrichedTransaction === null) return false;
+                        transaction = enrichedTransaction;
+                    }
+                    if (token !== this.routeRequestId) return false;
                     this.txView.tx = transaction;
                     this.txView.loading = false;
                     this.activeTxTab = "outputs";
@@ -1496,21 +1702,87 @@
             loadAddressData: async function (token, background) {
                 if (!background || !this.addressView.result) this.addressView.loading = true;
                 this.addressView.error = "";
+                this.addressView.accountNumberError = "";
                 try {
-                    var result = await rpcCall(this.api, "validateaddress", { address: this.route.params.address });
+                    var address = this.route.params.address;
+                    var validationPromise = rpcCall(this.api, "validateaddress", { address: address });
+                    var accountNumberPromise = rpcCall(this.api, "getaccountnumber", { address: address }).catch(function (error) {
+                        return { __error: error };
+                    });
+                    var result = await validationPromise;
                     if (token !== this.routeRequestId) return false;
+                    var accountNumberResult = await accountNumberPromise;
+                    if (token !== this.routeRequestId) return false;
+                    var accountNumber = null;
+                    var accountNumberError = "";
+                    if (accountNumberResult && accountNumberResult.__error) {
+                        var lookupMessage = readableError(accountNumberResult.__error, "Could not load the canonical account number for that address.");
+                        if (!/No account number registered/i.test(lookupMessage)) {
+                            accountNumberError = lookupMessage;
+                        }
+                    } else if (accountNumberResult && accountNumberResult.account_number) {
+                        var parsedAccountNumber = parseAccountNumber(accountNumberResult.account_number);
+                        accountNumber = {
+                            accountNumber: normalizeAccountNumber(accountNumberResult.account_number),
+                            blockHeight: parsedAccountNumber ? parsedAccountNumber.blockHeight : null,
+                            txIndex: parsedAccountNumber ? parsedAccountNumber.txIndex : null
+                        };
+                    }
                     this.addressView.result = {
                         isValid: coerceBoolean(result.is_valid),
                         viewPublicKey: result.view_public_key || "",
                         spendPublicKey: result.spend_public_key || ""
                     };
+                    this.addressView.accountNumber = accountNumber;
+                    this.addressView.accountNumberError = accountNumberError;
                     this.addressView.loading = false;
                     return true;
                 } catch (error) {
                     if (token === this.routeRequestId) {
                         this.addressView.error = readableError(error, "Could not validate that address.");
                         this.addressView.result = null;
+                        this.addressView.accountNumber = null;
+                        this.addressView.accountNumberError = "";
                         this.addressView.loading = false;
+                    }
+                    return false;
+                }
+            },
+            loadAccountNumberData: async function (token, background) {
+                if (!background || !this.accountNumberView.result) this.accountNumberView.loading = true;
+                this.accountNumberView.error = "";
+                try {
+                    var parsed = parseAccountNumber(this.route.params.accountNumber);
+                    if (!parsed) throw new Error("Enter a valid account number like 123456-0-A.");
+                    var resolved = await rpcCall(this.api, "resolveaccountnumber", { account_number: parsed.value });
+                    if (token !== this.routeRequestId) return false;
+                    var address = resolved && resolved.address ? String(resolved.address).trim() : "";
+                    var accountData = {
+                        accountNumber: parsed.value,
+                        blockHeight: parsed.blockHeight,
+                        txIndex: parsed.txIndex,
+                        address: address,
+                        viewPublicKey: "",
+                        spendPublicKey: "",
+                        isValidAddress: false
+                    };
+                    if (address) {
+                        try {
+                            var validation = await rpcCall(this.api, "validateaddress", { address: address });
+                            if (token !== this.routeRequestId) return false;
+                            accountData.isValidAddress = coerceBoolean(validation.is_valid);
+                            accountData.viewPublicKey = validation.view_public_key || "";
+                            accountData.spendPublicKey = validation.spend_public_key || "";
+                        } catch (validationError) {}
+                    }
+                    this.accountNumberView.result = accountData;
+                    this.accountNumberView.loading = false;
+                    return true;
+                } catch (error) {
+                    if (token === this.routeRequestId) {
+                        this.accountNumberView.error = readableError(error, "Could not resolve that account number.");
+                        this.accountNumberView.result = null;
+                        this.accountNumberView.loading = false;
                     }
                     return false;
                 }
@@ -1730,11 +2002,19 @@
             submitSearch: async function () {
                 var query = this.searchQuery.trim();
                 if (!query) {
-                    this.showToast("Enter a block height, hash, payment ID, or address.", "error");
+                    this.showToast("Enter a block height, hash, payment ID, address, or account number.", "error");
                     return;
                 }
                 if (query.length === 95 && ADDRESS_PATTERN.test(query)) {
                     await this.goTo({ name: "address", params: { address: query } });
+                    return;
+                }
+                if (ACCOUNT_NUMBER_PATTERN.test(normalizeAccountNumber(query))) {
+                    if (!isValidAccountNumber(query)) {
+                        this.showToast("Invalid account number.", "error");
+                        return;
+                    }
+                    await this.goTo({ name: "account-number", params: { accountNumber: normalizeAccountNumber(query) } });
                     return;
                 }
                 this.pageBusy = true;

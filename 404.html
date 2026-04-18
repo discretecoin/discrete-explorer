@@ -7,7 +7,7 @@
     <script>
         (function () {
             var path = window.location.pathname || '/';
-            var isExplorerRoute = /^\/(?:block|transaction|payment-id|address)\/[^/]+\/?$/.test(path) ||
+            var isExplorerRoute = /^\/(?:block|transaction|payment-id|address|account|account-number)\/[^/]+\/?$/.test(path) ||
                 /^\/(?:nodes|alt-blocks|tools|broadcast-transaction|check-funds|check-payment|validate-address|verify-message|amount-converter|payment-id-tools|paper-wallet|settings)\/?$/.test(path);
 
             if (!isExplorerRoute) {
