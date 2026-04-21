@@ -278,7 +278,7 @@
         } catch (error) {
             decoded = "";
         }
-        decoded = decoded.replace(/\u0000+$/g, "").trim();
+        decoded = decoded.replace(/^\u0000+/g, "").replace(/\u0000+$/g, "").trim();
         if (!decoded || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(decoded) || decoded.indexOf("\uFFFD") !== -1) return "";
         return decoded;
     }
