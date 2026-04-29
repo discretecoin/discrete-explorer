@@ -109,18 +109,26 @@
                                 <strong>{{ stats ? formatCoins(stats.min_fee) : '--' }}</strong>
                                 <span class="metric-meta">Network minimum fee</span>
                             </article>
-                            <article class="metric-card metric-card--node">
-                                <span class="metric-label">Connected node</span>
-                                <strong>{{ nodeLabel(api) }}</strong>
-                                <div class="metric-node-status">
-                                    <span class="status-pill" :class="'is-' + statsStatus">
-                                        <span class="status-dot"></span>
-                                        {{ statsStatusText }}
-                                    </span>
-                                    <span class="metric-meta">{{ statsFreshnessText }}</span>
-                                </div>
+                            <article class="metric-card">
+                                <span class="metric-label">Account numbers</span>
+                                <strong>{{ stats ? formatNumber(stats.registered_account_numbers_count) : '--' }}</strong>
+                                <span class="metric-meta">Registered on-chain aliases</span>
                             </article>
                         </div>
+
+                        <article class="node-status-strip">
+                            <div class="node-status-main">
+                                <span class="metric-label">Connected node</span>
+                                <strong>{{ nodeLabel(api) }}</strong>
+                            </div>
+                            <div class="metric-node-status">
+                                <span class="status-pill" :class="'is-' + statsStatus">
+                                    <span class="status-dot"></span>
+                                    {{ statsStatusText }}
+                                </span>
+                                <span class="metric-meta">{{ statsFreshnessText }}</span>
+                            </div>
+                        </article>
 
                         <div class="hero-grid hero-grid--focus">
                             <article class="hero-aside hero-chart-card hero-chart-card--feature">
@@ -1024,6 +1032,7 @@
                                         <div class="detail-row"><span>Top hash</span><strong class="hash-string">{{ node.topBlockHash || '--' }}</strong></div>
                                         <div class="detail-row"><span>Difficulty</span><strong>{{ formatDifficulty(node.difficulty) }}</strong></div>
                                         <div class="detail-row"><span>Alt blocks</span><strong>{{ formatNumber(node.altBlocksCount) }}</strong></div>
+                                        <div class="detail-row"><span>Account numbers</span><strong>{{ formatNumber(node.registeredAccountNumbersCount) }}</strong></div>
                                         <div class="detail-row"><span>RPC / IN / OUT</span><strong>{{ formatNumber(node.rpcConnectionsCount) }} / {{ formatNumber(node.incomingConnectionsCount) }} / {{ formatNumber(node.outgoingConnectionsCount) }}</strong></div>
                                         <div class="detail-row"><span>Version</span><strong>{{ node.version || '--' }}</strong></div>
                                         <div class="detail-row"><span>Start time</span><strong>{{ node.startTime ? formatDateTime(node.startTime) : '--' }}</strong></div>

@@ -1812,6 +1812,7 @@
                             topBlockHash: "",
                             difficulty: null,
                             altBlocksCount: null,
+                            registeredAccountNumbersCount: null,
                             rpcConnectionsCount: null,
                             incomingConnectionsCount: null,
                             outgoingConnectionsCount: null,
@@ -1827,6 +1828,7 @@
                             item.topBlockHash = info.top_block_hash || "";
                             item.difficulty = info.difficulty;
                             item.altBlocksCount = info.alt_blocks_count;
+                            item.registeredAccountNumbersCount = info.registered_account_numbers_count;
                             item.rpcConnectionsCount = coerceInteger(info.rpc_connections_count);
                             item.incomingConnectionsCount = coerceInteger(info.incoming_connections_count);
                             item.outgoingConnectionsCount = coerceInteger(info.outgoing_connections_count);

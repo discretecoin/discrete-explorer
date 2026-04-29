@@ -258,6 +258,7 @@ svg {
 .sidebar-card,
 .panel,
 .metric-card,
+.node-status-strip,
 .hero-card,
 .hero-aside {
     backdrop-filter: blur(18px);
@@ -580,12 +581,29 @@ html[data-theme="light"] .searchbar-submit:hover {
     margin-top: 0.55rem;
 }
 
-.metric-card--node strong {
+.node-status-main strong {
     font-family: var(--font-body);
     font-size: 1rem;
     letter-spacing: 0;
     line-height: 1.35;
     word-break: break-word;
+}
+
+.node-status-strip {
+    align-items: center;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    padding: 0.85rem 0.9rem;
+}
+
+.node-status-main {
+    min-width: 0;
+}
+
+.node-status-main strong {
+    display: block;
+    margin-top: 0.35rem;
 }
 
 .metric-node-status {
@@ -1466,6 +1484,15 @@ html[data-theme="dark"] .detail-row .hash-string {
     .metric-grid--compact,
     .theme-chooser {
         grid-template-columns: 1fr;
+    }
+
+    .node-status-strip {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .node-status-strip .metric-node-status {
+        align-items: flex-start;
     }
 
     .detail-row {
