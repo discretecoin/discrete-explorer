@@ -999,6 +999,12 @@ html[data-theme="dark"] .detail-row .hash-string {
     padding: 0.35rem 0.45rem;
 }
 
+html[data-theme="dark"] .inline-control select {
+    background-color: var(--bg-soft);
+    color: var(--text);
+    color-scheme: dark;
+}
+
 .inline-control--input input {
     background: transparent;
     min-width: 86px;
@@ -1035,6 +1041,18 @@ html[data-theme="dark"] .detail-row .hash-string {
     padding: 0.75rem 0.85rem;
     resize: vertical;
     width: 100%;
+}
+
+select option,
+select optgroup {
+    background-color: var(--bg-elevated);
+    color: var(--text);
+}
+
+html[data-theme="dark"] select option,
+html[data-theme="dark"] select optgroup {
+    background-color: var(--bg-soft);
+    color: var(--text);
 }
 
 .field input:focus,
