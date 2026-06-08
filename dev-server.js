@@ -21,7 +21,7 @@ const mimeTypes = {
 
 const spaRoutePatterns = [
     /^\/(?:block|transaction|payment-id|address|account|account-number)\/[^/]+\/?$/i,
-    /^\/(?:nodes|alt-blocks|tools|broadcast-transaction|check-funds|check-payment|validate-address|verify-message|amount-converter|payment-id-tools|paper-wallet|settings)\/?$/i
+    /^\/(?:nodes|charts|alt-blocks|tools|broadcast-transaction|check-funds|check-payment|validate-address|verify-message|amount-converter|payment-id-tools|paper-wallet|settings)\/?$/i
 ];
 
 function isSpaRoute(pathname) {

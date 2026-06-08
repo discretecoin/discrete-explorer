@@ -371,6 +371,141 @@
                         </div>
                     </section>
 
+                    <section v-else-if="route.name === 'charts'" class="page-section">
+                        <div class="page-head">
+                            <div>
+                                <p class="eyebrow">Historical charts</p>
+                                <h1 class="page-title">Network stats</h1>
+                                <p class="page-subtitle" v-if="historicStatsChart">
+                                    {{ historicStatsChart.sourceLabel }}
+                                    <span class="bullet">&middot;</span>
+                                    {{ historicStatsChart.rangeLabel }}
+                                    <span class="bullet">&middot;</span>
+                                    {{ formatNumber(historicStatsChart.points.length) }} points
+                                </p>
+                                <p class="page-subtitle" v-else>Block stats from the connected RPC node.</p>
+                            </div>
+                            <div class="page-actions">
+                                <button type="button" class="button button--ghost button--small" @click="refreshCurrentView" :disabled="historicStats.loading || pageBusy">
+                                    <i class="fas fa-sync-alt"></i>
+                                    {{ historicStats.loading ? 'Loading...' : 'Refresh' }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div v-if="historicStatsChart" class="metric-grid metric-grid--compact">
+                            <article class="metric-card">
+                                <span class="metric-label">Latest {{ historicStatsChart.metric.label }}</span>
+                                <strong>{{ historicStatsChart.latest.displayValue }}</strong>
+                                <span class="metric-meta">H {{ formatNumber(historicStatsChart.latest.height) }}</span>
+                            </article>
+                            <article class="metric-card">
+                                <span class="metric-label">Average</span>
+                                <strong>{{ formatHistoricStatsMetricValue(historicStatsChart.metric.key, null, historicStatsChart.average, true) }}</strong>
+                                <span class="metric-meta">{{ formatNumber(historicStatsChart.points.length) }} sampled points</span>
+                            </article>
+                            <article class="metric-card">
+                                <span class="metric-label">Peak</span>
+                                <strong>{{ historicStatsChart.maximumPoint.displayValue }}</strong>
+                                <span class="metric-meta">H {{ formatNumber(historicStatsChart.maximumPoint.height) }}</span>
+                            </article>
+                            <article class="metric-card">
+                                <span class="metric-label">Step</span>
+                                <strong>{{ historicStatsChart.sampleStep ? '~' + formatNumber(historicStatsChart.sampleStep) : '--' }}</strong>
+                                <span class="metric-meta">Blocks between samples</span>
+                            </article>
+                        </div>
+
+                        <article class="panel panel--wide historic-chart-panel">
+                            <div class="panel-header historic-chart-header">
+                                <div>
+                                    <p class="eyebrow">Stats RPC</p>
+                                    <h2>{{ historicStatsChart ? historicStatsChart.metric.label : 'Historical series' }}</h2>
+                                </div>
+                                <div class="chart-summary" v-if="historicStatsChart">
+                                    <strong>{{ historicStatsChart.latest.displayValue }}</strong>
+                                    <span>Latest sample</span>
+                                </div>
+                            </div>
+
+                            <div class="tab-strip chart-metric-tabs" v-if="historicStatsMetrics.length">
+                                <button type="button" class="tab-button" v-for="metric in historicStatsMetrics" :key="metric.key" :class="{ active: historicStats.metric === metric.key }" @click="setHistoricStatsMetric(metric.key)">
+                                    <i class="fas" :class="metric.icon"></i>
+                                    <span>{{ metric.label }}</span>
+                                </button>
+                            </div>
+
+                            <div class="chart-zoom-strip">
+                                <div class="chart-range-tabs">
+                                    <button type="button" class="button button--ghost button--small" :class="{ active: historicStats.viewMode === 'all' }" @click="setHistoricStatsView('all')" :disabled="historicStats.loading">
+                                        Full
+                                    </button>
+                                    <button type="button" class="button button--ghost button--small" :class="{ active: historicStats.viewMode === 'last-10000' }" @click="setHistoricStatsView('last-10000')" :disabled="historicStats.loading">
+                                        Last 10k
+                                    </button>
+                                    <button type="button" class="button button--ghost button--small" :class="{ active: historicStats.viewMode === 'last-1000' }" @click="setHistoricStatsView('last-1000')" :disabled="historicStats.loading">
+                                        Last 1k
+                                    </button>
+                                </div>
+                                <div class="chart-range-controls">
+                                    <label class="inline-control inline-control--input">
+                                        <span>Start</span>
+                                        <input v-model.trim="historicStats.customStart" type="number" min="0" placeholder="0" @keydown.enter.prevent="applyHistoricStatsCustomRange">
+                                    </label>
+                                    <label class="inline-control inline-control--input">
+                                        <span>End</span>
+                                        <input v-model.trim="historicStats.customEnd" type="number" min="0" placeholder="10000" @keydown.enter.prevent="applyHistoricStatsCustomRange">
+                                    </label>
+                                    <button type="button" class="button button--ghost button--small" @click="applyHistoricStatsCustomRange" :disabled="historicStats.loading || !historicStatsCustomRangeReady">
+                                        Zoom
+                                    </button>
+                                    <button type="button" class="button button--ghost button--small" @click="resetHistoricStatsZoom" :disabled="historicStats.loading || historicStats.viewMode === 'all'">
+                                        Reset
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div v-if="historicStats.loading && !historicStats.points.length" class="state-card">
+                                <div class="spinner"></div>
+                                <p>Loading historical stats...</p>
+                            </div>
+                            <div v-else-if="historicStats.error && !historicStats.points.length" class="state-card state-card--error">
+                                <i class="fas fa-triangle-exclamation"></i>
+                                <p>{{ historicStats.error }}</p>
+                            </div>
+                            <template v-else-if="historicStatsChart">
+                                <div class="history-chart">
+                                    <div class="history-chart-stage">
+                                        <canvas ref="historicStatsCanvas" class="history-chart-canvas" aria-label="Historical network stats chart"></canvas>
+                                    </div>
+                                    <div class="difficulty-chart-meta">
+                                        <span>{{ historicStatsChart.metric.label }}</span>
+                                        <span>H {{ formatNumber(historicStatsChart.firstHeight) }}</span>
+                                        <span>H {{ formatNumber(historicStatsChart.lastHeight) }}</span>
+                                    </div>
+                                    <div class="chart-range-slider">
+                                        <div class="chart-range-slider-labels">
+                                            <span>H {{ formatNumber(historicStatsHandleRange.start) }}</span>
+                                            <span>{{ formatNumber(historicStatsHandleRange.span) }} blocks</span>
+                                            <span>H {{ formatNumber(historicStatsHandleRange.end) }}</span>
+                                        </div>
+                                        <div class="chart-range-slider-track">
+                                            <canvas ref="historicStatsNavigatorCanvas" class="chart-range-slider-canvas" aria-hidden="true"></canvas>
+                                            <span class="chart-range-slider-selection" :style="{ left: historicStatsHandleRange.leftPercent + '%', right: historicStatsHandleRange.rightPercent + '%' }"></span>
+                                            <input class="chart-range-slider-input chart-range-slider-input--start" type="range" :min="historicStatsHandleRange.min" :max="historicStatsHandleRange.max" :value="historicStatsHandleRange.start" :disabled="historicStats.loading || historicStatsHandleRange.max <= 0" @input="setHistoricStatsHandle('start', $event.target.value)" @change="applyHistoricStatsCustomRange">
+                                            <input class="chart-range-slider-input chart-range-slider-input--end" type="range" :min="historicStatsHandleRange.min" :max="historicStatsHandleRange.max" :value="historicStatsHandleRange.end" :disabled="historicStats.loading || historicStatsHandleRange.max <= 0" @input="setHistoricStatsHandle('end', $event.target.value)" @change="applyHistoricStatsCustomRange">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="chart-footnote">
+                                    <span>{{ historicStats.source === 'range' ? 'Loaded with getstatsinrange' : historicStats.source === 'range-fallback' ? 'Loaded with getstatsinrange fallback' : historicStats.source === 'sparse-zoom' ? 'Loaded with sampled getstatsbyheights' : 'Loaded with getstatsbyheights' }}</span>
+                                    <span v-if="historicStats.requestDuration !== null">RPC {{ historicStats.requestDuration.toFixed(3) }}s</span>
+                                    <span v-if="historicStats.loadedAt">Updated {{ formatDuration(nowSeconds - historicStats.loadedAt) }} ago</span>
+                                </div>
+                            </template>
+                        </article>
+                    </section>
+
                     <section v-else-if="route.name === 'block'" class="page-section">
                         <div v-if="blockView.loading" class="state-card">
                             <div class="spinner"></div>

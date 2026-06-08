@@ -13,9 +13,20 @@
     var DEFAULT_PAGE_SIZE = Number(window.blocksPerPage) || 20;
     var RECENT_CONFIRMED_TX_LIMIT = 20;
     var RECENT_CONFIRMED_TX_SCAN_BATCH = Number(window.recentConfirmedTxBlockRange) || 1000;
+    var HISTORIC_STATS_TARGET_STEP = Math.max(Number(window.historicStatsSampleStep) || 1000, 1);
+    var HISTORIC_STATS_MAX_POINTS = Math.max(Number(window.historicStatsMaxPoints) || 1500, 2);
+    var HISTORIC_STATS_RANGE_LIMIT = Math.max(Math.min(Number(window.historicStatsRangeLimit) || 10000, 10000), 2);
     var DATE_LOCALE = "en-GB";
     var AVG_HASHRATE_BASELINE_HEIGHT = coerceInteger(window.avgHashrateBaselineHeight);
     var AVG_HASHRATE_BASELINE_CUMULATIVE_DIFFICULTY = toBigIntValue(window.avgHashrateBaselineCumulativeDifficulty);
+    var HISTORIC_STATS_METRICS = [
+        { key: "difficulty", label: "Difficulty", icon: "fa-wave-square" },
+        { key: "hashrate", label: "Hashrate", icon: "fa-tachometer-alt" },
+        { key: "block_size", label: "Block size", icon: "fa-cube" },
+        { key: "transactions_count", label: "Txs / block", icon: "fa-receipt" },
+        { key: "reward", label: "Reward", icon: "fa-coins" },
+        { key: "already_generated_coins", label: "Supply", icon: "fa-chart-area" }
+    ];
     var ADDRESS_PATTERN = window.addressPattern instanceof RegExp
         ? window.addressPattern
         : /^K[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{94}$/;
@@ -24,6 +35,7 @@
         : /^\d+-\d+-[0-9A-Za-z]$/;
     var SIMPLE_ROUTE_NAMES = [
         "nodes",
+        "charts",
         "alt-blocks",
         "tools",
         "broadcast-transaction",
@@ -382,6 +394,16 @@
         return SCRIPT_PROMISES[src];
     }
 
+    function stringifyJsonIntegerFields(jsonText, fieldNames) {
+        var result = String(jsonText || "");
+        (fieldNames || []).forEach(function (fieldName) {
+            var escapedName = String(fieldName).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            var pattern = new RegExp('("' + escapedName + '"\\s*:\\s*)(-?\\d+)', "g");
+            result = result.replace(pattern, '$1"$2"');
+        });
+        return result;
+    }
+
     function readableError(error, fallbackMessage) {
         if (!error) return fallbackMessage;
         if (typeof error === "string") return error;
@@ -449,6 +471,94 @@
         if (!values || !values.length) return 0;
         var total = values.reduce(function (sum, value) { return sum + Number(value || 0); }, 0);
         return total / values.length;
+    }
+
+    function atomicToCoinNumber(value) {
+        var atomics = toAtomicBigInt(value);
+        if (atomics === null) return 0;
+        return Number(atomics) / Number(COIN_UNIT_BIGINT || 1n);
+    }
+
+    function buildHistoricSampleHeights(tipHeight) {
+        var tip = coerceInteger(tipHeight);
+        if (tip === null || tip < 0) return [];
+
+        var step = Math.max(HISTORIC_STATS_TARGET_STEP, Math.ceil(Math.max(tip, 1) / (HISTORIC_STATS_MAX_POINTS - 1)));
+        var heights = [];
+        for (var height = 0; height < tip; height += step) {
+            heights.push(height);
+        }
+        if (!heights.length || heights[heights.length - 1] !== tip) heights.push(tip);
+
+        return heights.filter(function (heightValue, index) {
+            return index === 0 || heightValue !== heights[index - 1];
+        });
+    }
+
+    function buildHistoricRangeSampleHeights(startHeight, endHeight) {
+        var start = Math.max(coerceInteger(startHeight) || 0, 0);
+        var end = Math.max(coerceInteger(endHeight) || 0, 0);
+        if (start > end) {
+            var originalStart = start;
+            start = end;
+            end = originalStart;
+        }
+
+        var span = Math.max(end - start, 1);
+        var step = Math.max(1, Math.ceil(span / (HISTORIC_STATS_MAX_POINTS - 1)));
+        var heights = [];
+        for (var height = start; height < end; height += step) {
+            heights.push(height);
+        }
+        if (!heights.length || heights[heights.length - 1] !== end) heights.push(end);
+
+        return heights.filter(function (heightValue, index) {
+            return index === 0 || heightValue !== heights[index - 1];
+        });
+    }
+
+    function thinHistoricStats(stats) {
+        var list = (stats || []).slice();
+        if (list.length <= HISTORIC_STATS_MAX_POINTS) return list;
+
+        var step = Math.ceil((list.length - 1) / (HISTORIC_STATS_MAX_POINTS - 1));
+        var thinned = [];
+        for (var index = 0; index < list.length; index += step) {
+            thinned.push(list[index]);
+        }
+        if (thinned[thinned.length - 1] !== list[list.length - 1]) thinned.push(list[list.length - 1]);
+        return thinned;
+    }
+
+    function normalizeHistoricStats(stats) {
+        var seen = Object.create(null);
+        return (stats || []).map(function (stat) {
+            var height = coerceInteger(stat && stat.height);
+            if (height === null || height < 0) return null;
+            return {
+                height: height,
+                timestamp: coerceInteger(stat.timestamp) || 0,
+                difficulty: Number(stat.difficulty || 0),
+                transactionsCount: coerceInteger(stat.transactions_count) || 0,
+                blockSize: coerceInteger(stat.block_size) || 0,
+                reward: stat.reward || 0,
+                alreadyGeneratedCoins: correctOverflow(stat.already_generated_coins || 0)
+            };
+        }).filter(Boolean).sort(function (left, right) {
+            return left.height - right.height;
+        }).filter(function (point) {
+            if (seen[point.height]) return false;
+            seen[point.height] = true;
+            return true;
+        });
+    }
+
+    function getHistoricStatsMetric(key) {
+        var normalizedKey = String(key || "");
+        for (var index = 0; index < HISTORIC_STATS_METRICS.length; index += 1) {
+            if (HISTORIC_STATS_METRICS[index].key === normalizedKey) return HISTORIC_STATS_METRICS[index];
+        }
+        return HISTORIC_STATS_METRICS[0];
     }
 
     function formatEnglishLocalDate(seconds, options) {
@@ -566,7 +676,9 @@
         var options = Object.assign({ cache: "no-store", headers: {} }, init || {});
         options.headers = Object.assign({}, init && init.headers ? init.headers : {});
         var timeoutMs = Number(options.timeoutMs);
+        var bigIntFields = Array.isArray(options.bigIntFields) ? options.bigIntFields : [];
         delete options.timeoutMs;
+        delete options.bigIntFields;
 
         var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
         var timeoutId = 0;
@@ -598,7 +710,12 @@
 
             var response = await fetchPromise;
             var payload;
-            try { payload = await response.json(); } catch (error) { throw new Error("Invalid JSON response."); }
+            try {
+                var responseText = await response.text();
+                payload = JSON.parse(bigIntFields.length ? stringifyJsonIntegerFields(responseText, bigIntFields) : responseText);
+            } catch (error) {
+                throw new Error("Invalid JSON response.");
+            }
             if (!response.ok) throw new Error(payload && payload.error && payload.error.message ? payload.error.message : "Request failed.");
             return payload;
         } catch (error) {
@@ -638,12 +755,13 @@
         });
     }
 
-    async function rpcCall(apiUrl, method, params) {
-        var payload = await fetchJson(buildApiRequestUrl(apiUrl, "/json_rpc"), {
+    async function rpcCall(apiUrl, method, params, options) {
+        var requestOptions = Object.assign({
             method: "POST",
             headers: { Accept: "application/json", "Content-Type": "application/json" },
             body: JSON.stringify({ jsonrpc: "2.0", id: "karbo_explorer", method: method, params: params || {} })
-        });
+        }, options || {});
+        var payload = await fetchJson(buildApiRequestUrl(apiUrl, "/json_rpc"), requestOptions);
         if (payload && payload.error) throw new Error(payload.error.message || "RPC request failed.");
         return payload && payload.result ? payload.result : payload;
     }
@@ -681,6 +799,7 @@
                 nowSeconds: Math.floor(Date.now() / 1000),
                 primaryNav: [
                     { name: "home", label: "Overview", icon: "fa-chart-line" },
+                    { name: "charts", label: "Charts", icon: "fa-chart-area" },
                     { name: "nodes", label: "Nodes", icon: "fa-server" },
                     { name: "alt-blocks", label: "Alt blocks", icon: "fa-code-branch" },
                     { name: "tools", label: "Tools", icon: "fa-th-large" },
@@ -719,6 +838,21 @@
                 paymentView: { loading: false, error: "", txs: [] },
                 addressView: { loading: false, error: "", result: null, accountNumber: null, accountNumberError: "" },
                 accountNumberView: { loading: false, error: "", result: null },
+                historicStats: {
+                    loading: false,
+                    error: "",
+                    points: [],
+                    navigatorPoints: [],
+                    metric: "difficulty",
+                    viewMode: "all",
+                    customStart: "",
+                    customEnd: "",
+                    source: "",
+                    sampleStep: 0,
+                    requestedPoints: 0,
+                    requestDuration: null,
+                    loadedAt: 0
+                },
                 nodesView: { loading: false, error: "", items: [], summary: null },
                 altView: { loading: false, error: "", items: [] },
                 settings: {
@@ -778,7 +912,9 @@
                     wallet: null
                 },
                 charts: {
-                    difficulty: null
+                    difficulty: null,
+                    historicStats: null,
+                    historicStatsNavigator: null
                 },
                 activeTxTab: "outputs",
                 txVerifier: {
@@ -903,6 +1039,115 @@
                     firstHeight: points[0].height,
                     lastHeight: points[points.length - 1].height
                 };
+            },
+            historicStatsMetrics: function () {
+                return HISTORIC_STATS_METRICS;
+            },
+            historicStatsChart: function () {
+                var metric = getHistoricStatsMetric(this.historicStats.metric);
+                var points = (this.historicStats.points || []).map(function (point) {
+                    var value = this.getHistoricStatsMetricValue(point, metric.key);
+                    if (!Number.isFinite(value)) return null;
+                    return Object.assign({}, point, {
+                        value: value,
+                        chartTime: point.timestamp > 0 ? new Date(point.timestamp * 1000).toISOString() : "",
+                        dateTime: point.timestamp > 0 ? this.formatDateTime(point.timestamp) : "Unknown time",
+                        displayValue: this.formatHistoricStatsMetricValue(metric.key, point, value, false)
+                    });
+                }, this).filter(Boolean);
+
+                if (!points.length) return null;
+
+                var values = points.map(function (point) { return point.value; });
+                var sampleStep = this.historicStats.sampleStep || (points.length > 1 ? points[1].height - points[0].height : 0);
+                var firstPoint = points[0];
+                var lastPoint = points[points.length - 1];
+                var maximumPoint = points.reduce(function (bestPoint, point) {
+                    return point.value > bestPoint.value ? point : bestPoint;
+                }, firstPoint);
+
+                return {
+                    metric: metric,
+                    points: points,
+                    labels: points.map(function (point) { return point.height; }),
+                    latest: lastPoint,
+                    average: average(values),
+                    maximum: maximumPoint.value,
+                    maximumPoint: maximumPoint,
+                    firstHeight: firstPoint.height,
+                    lastHeight: lastPoint.height,
+                    sampleStep: sampleStep,
+                    source: this.historicStats.source,
+                    sourceLabel: this.historicStats.source === "range"
+                        ? "Zoom range"
+                        : this.historicStats.source === "sparse-zoom"
+                            ? "Sampled zoom"
+                        : this.historicStats.source === "range-fallback"
+                            ? "Recent range"
+                            : "Full history",
+                    rangeLabel: "H ".concat(this.formatNumber(firstPoint.height), " - H ").concat(this.formatNumber(lastPoint.height))
+                };
+            },
+            historicStatsNavigatorChart: function () {
+                var metric = getHistoricStatsMetric(this.historicStats.metric);
+                var sourcePoints = this.historicStats.navigatorPoints && this.historicStats.navigatorPoints.length
+                    ? this.historicStats.navigatorPoints
+                    : this.historicStats.points;
+                var points = (sourcePoints || []).map(function (point) {
+                    var value = this.getHistoricStatsMetricValue(point, metric.key);
+                    if (!Number.isFinite(value)) return null;
+                    return Object.assign({}, point, {
+                        value: value
+                    });
+                }, this).filter(Boolean);
+
+                if (!points.length) return null;
+
+                return {
+                    metric: metric,
+                    points: points,
+                    labels: points.map(function (point) { return point.height; })
+                };
+            },
+            historicStatsHandleRange: function () {
+                var tipHeight = this.getTipHeight();
+                var max = tipHeight === null ? 0 : Math.max(tipHeight, 0);
+                var chart = this.historicStatsChart;
+                var start = coerceInteger(this.historicStats.customStart);
+                var end = coerceInteger(this.historicStats.customEnd);
+
+                if (this.historicStats.viewMode !== "custom" || start === null || end === null) {
+                    start = chart ? chart.firstHeight : 0;
+                    end = chart ? chart.lastHeight : max;
+                }
+
+                start = Math.min(Math.max(start || 0, 0), max);
+                end = Math.min(Math.max(end || 0, 0), max);
+                if (start > end) {
+                    var originalStart = start;
+                    start = end;
+                    end = originalStart;
+                }
+
+                var divisor = max > 0 ? max : 1;
+                return {
+                    min: 0,
+                    max: max,
+                    start: start,
+                    end: end,
+                    leftPercent: start / divisor * 100,
+                    rightPercent: Math.max(0, 100 - (end / divisor * 100)),
+                    span: end - start + 1
+                };
+            },
+            historicStatsCustomRangeReady: function () {
+                if (String(this.historicStats.customStart).trim() === "" || String(this.historicStats.customEnd).trim() === "") {
+                    return false;
+                }
+
+                var start = coerceInteger(this.historicStats.customStart);
+                var end = coerceInteger(this.historicStats.customEnd);
+                return start !== null && end !== null && start >= 0 && end >= 0;
             },
             toolCards: function () {
                 return this.toolNav;
@@ -1058,6 +1303,130 @@
                 if (numeric < 3600) return "".concat(Math.floor(numeric / 60), "m ").concat(Math.floor(numeric % 60), "s");
                 if (numeric < 86400) return "".concat(Math.floor(numeric / 3600), "h ").concat(Math.floor((numeric % 3600) / 60), "m");
                 return "".concat(Math.floor(numeric / 86400), "d ").concat(Math.floor((numeric % 86400) / 3600), "h");
+            },
+            formatCoinUnits: function (value) {
+                var numeric = Number(value);
+                if (!Number.isFinite(numeric)) return "--";
+                var rendered = numeric.toLocaleString(undefined, {
+                    maximumFractionDigits: numeric >= 1000 ? 0 : numeric >= 10 ? 2 : 4
+                });
+                return "".concat(rendered, " ").concat(String(window.symbol || "KRB"));
+            },
+            getHistoricStatsMetricValue: function (point, metricKey) {
+                if (!point) return NaN;
+                if (metricKey === "difficulty") return Number(point.difficulty || 0);
+                if (metricKey === "hashrate") return this.blockTargetInterval > 0 ? Number(point.difficulty || 0) / this.blockTargetInterval : 0;
+                if (metricKey === "block_size") return Number(point.blockSize || 0);
+                if (metricKey === "transactions_count") return Number(point.transactionsCount || 0);
+                if (metricKey === "reward") return atomicToCoinNumber(point.reward);
+                if (metricKey === "already_generated_coins") return atomicToCoinNumber(point.alreadyGeneratedCoins);
+                return NaN;
+            },
+            formatHistoricStatsMetricValue: function (metricKey, point, value, axisValue) {
+                if (metricKey === "difficulty") return this.formatDifficulty(Math.round(value));
+                if (metricKey === "hashrate") return this.formatHashrate(value);
+                if (metricKey === "block_size") return this.formatBytes(value);
+                if (metricKey === "transactions_count") return this.formatNumber(Math.round(value * 10) / 10);
+                if (metricKey === "reward") return axisValue ? this.formatCoinUnits(value) : this.formatCoins(point && point.reward, 6);
+                if (metricKey === "already_generated_coins") return axisValue ? this.formatCoinUnits(value) : this.formatCoins(point && point.alreadyGeneratedCoins);
+                return this.formatNumber(value);
+            },
+            setHistoricStatsMetric: function (metricKey) {
+                var metric = getHistoricStatsMetric(metricKey);
+                if (this.historicStats.metric === metric.key) return;
+                this.historicStats.metric = metric.key;
+                this.scheduleHistoricStatsChartRender();
+            },
+            getHistoricStatsRange: function (tipHeight) {
+                var tip = coerceInteger(tipHeight);
+                if (tip === null || tip < 0 || this.historicStats.viewMode === "all") return null;
+
+                var start = 0;
+                var end = tip;
+                if (this.historicStats.viewMode === "last-1000") {
+                    start = Math.max(tip - 999, 0);
+                } else if (this.historicStats.viewMode === "last-10000") {
+                    start = Math.max(tip - HISTORIC_STATS_RANGE_LIMIT + 1, 0);
+                } else if (this.historicStats.viewMode === "custom") {
+                    start = coerceInteger(this.historicStats.customStart);
+                    end = coerceInteger(this.historicStats.customEnd);
+                    if (start === null || end === null || start < 0 || end < 0) {
+                        throw new Error("Enter valid start and end heights.");
+                    }
+                    start = Math.min(start, tip);
+                    end = Math.min(end, tip);
+                    if (start > end) {
+                        var originalStart = start;
+                        start = end;
+                        end = originalStart;
+                    }
+                }
+
+                var requestedBlocks = end - start + 1;
+                return {
+                    start: start,
+                    end: end,
+                    count: requestedBlocks
+                };
+            },
+            setHistoricStatsHandle: function (side, value) {
+                var range = this.historicStatsHandleRange;
+                var nextValue = coerceInteger(value);
+                if (nextValue === null) return;
+
+                nextValue = Math.min(Math.max(nextValue, range.min), range.max);
+                var start = range.start;
+                var end = range.end;
+                if (side === "start") {
+                    start = Math.min(nextValue, end);
+                } else {
+                    end = Math.max(nextValue, start);
+                }
+
+                this.historicStats.viewMode = "custom";
+                this.historicStats.customStart = String(start);
+                this.historicStats.customEnd = String(end);
+            },
+            setHistoricStatsView: async function (viewMode) {
+                var nextMode = viewMode === "last-1000" || viewMode === "last-10000" ? viewMode : "all";
+                this.historicStats.viewMode = nextMode;
+                this.historicStats.error = "";
+                await this.loadHistoricStatsData(++this.routeRequestId, false);
+            },
+            applyHistoricStatsCustomRange: async function () {
+                if (!this.historicStatsCustomRangeReady) return;
+                this.historicStats.viewMode = "custom";
+                this.historicStats.error = "";
+                await this.loadHistoricStatsData(++this.routeRequestId, false);
+            },
+            resetHistoricStatsZoom: async function () {
+                this.historicStats.viewMode = "all";
+                this.historicStats.customStart = "";
+                this.historicStats.customEnd = "";
+                this.historicStats.error = "";
+                await this.loadHistoricStatsData(++this.routeRequestId, false);
+            },
+            zoomHistoricStatsAroundHeight: async function (height) {
+                var center = coerceInteger(height);
+                var tipHeight = this.getTipHeight();
+                if (center === null || tipHeight === null) return;
+
+                var model = this.historicStatsChart;
+                var currentSpan = model ? model.lastHeight - model.firstHeight + 1 : HISTORIC_STATS_RANGE_LIMIT;
+                var nextSpan = model && this.historicStats.source === "range"
+                    ? Math.max(Math.floor(currentSpan / 4), 200)
+                    : HISTORIC_STATS_RANGE_LIMIT;
+                nextSpan = Math.min(Math.max(nextSpan, 1), HISTORIC_STATS_RANGE_LIMIT);
+
+                var start = Math.max(center - Math.floor(nextSpan / 2), 0);
+                var end = Math.min(start + nextSpan - 1, tipHeight);
+                start = Math.max(end - nextSpan + 1, 0);
+
+                this.historicStats.viewMode = "custom";
+                this.historicStats.customStart = String(start);
+                this.historicStats.customEnd = String(end);
+                this.historicStats.error = "";
+                await this.loadHistoricStatsData(++this.routeRequestId, false);
             },
             computeAccountNumber: function (blockHeight, txIndex) {
                 var normalizedHeight = coerceInteger(blockHeight);
@@ -1335,6 +1704,298 @@
                     }
                 });
             },
+            scheduleHistoricStatsChartRender: function () {
+                var _this = this;
+                this.$nextTick(function () {
+                    _this.renderHistoricStatsChart();
+                });
+            },
+            destroyHistoricStatsChart: function () {
+                if (this.charts.historicStats && typeof this.charts.historicStats.destroy === "function") {
+                    this.charts.historicStats.destroy();
+                }
+                if (this.charts.historicStatsNavigator && typeof this.charts.historicStatsNavigator.destroy === "function") {
+                    this.charts.historicStatsNavigator.destroy();
+                }
+                this.charts.historicStats = null;
+                this.charts.historicStatsNavigator = null;
+            },
+            renderHistoricStatsChart: async function () {
+                var _this = this;
+                if (this.route.name !== "charts") {
+                    this.destroyHistoricStatsChart();
+                    return;
+                }
+
+                var model = this.historicStatsChart;
+                var canvas = this.$refs.historicStatsCanvas;
+                if (!model || !canvas) {
+                    this.destroyHistoricStatsChart();
+                    return;
+                }
+
+                try {
+                    if (!window.Chart) await loadScriptOnce("/js/Chart.bundle.min.js");
+                } catch (error) {
+                    this.destroyHistoricStatsChart();
+                    this.showToast("Could not load the chart library.", "error");
+                    return;
+                }
+
+                if (!window.Chart) return;
+
+                this.destroyHistoricStatsChart();
+
+                var styles = window.getComputedStyle(document.documentElement);
+                var primary = styles.getPropertyValue("--primary").trim() || "#5ca2ff";
+                var accent = styles.getPropertyValue("--accent").trim() || "#f7b548";
+                var success = styles.getPropertyValue("--success").trim() || "#39d98a";
+                var warning = styles.getPropertyValue("--warning").trim() || "#f6c453";
+                var danger = styles.getPropertyValue("--danger").trim() || "#ff6b79";
+                var lineColor = styles.getPropertyValue("--line").trim() || "rgba(137, 175, 255, 0.16)";
+                var lineStrong = styles.getPropertyValue("--line-strong").trim() || "rgba(137, 175, 255, 0.24)";
+                var textColor = styles.getPropertyValue("--text").trim() || "#edf4ff";
+                var textMuted = styles.getPropertyValue("--text-muted").trim() || "#9fb2ca";
+                var textSoft = styles.getPropertyValue("--text-soft").trim() || "#7f93ac";
+                var backgroundStrong = styles.getPropertyValue("--bg-card-strong").trim() || "rgba(17, 29, 48, 0.96)";
+                var metricColors = {
+                    difficulty: primary,
+                    hashrate: success,
+                    block_size: accent,
+                    transactions_count: danger,
+                    reward: warning,
+                    already_generated_coins: "#9b8cff"
+                };
+                var chartColor = metricColors[model.metric.key] || primary;
+                var context = canvas.getContext("2d");
+                if (!context) return;
+
+                this.charts.historicStats = new window.Chart(context, {
+                    type: "line",
+                    data: {
+                        labels: model.labels,
+                        datasets: [
+                            {
+                                label: model.metric.label,
+                                yAxisID: "historicMetric",
+                                data: model.points.map(function (point) {
+                                    return {
+                                        x: point.height,
+                                        y: point.value
+                                    };
+                                }),
+                                borderColor: chartColor,
+                                backgroundColor: chartColor,
+                                borderWidth: 2.5,
+                                pointRadius: model.points.length > 700 ? 0 : 1.8,
+                                pointHoverRadius: 4,
+                                pointHitRadius: 8,
+                                fill: false
+                            }
+                        ]
+                    },
+                    options: {
+                        animation: {
+                            duration: 0
+                        },
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        legend: {
+                            display: false
+                        },
+                        elements: {
+                            line: {
+                                tension: 0
+                            }
+                        },
+                        scales: {
+                            xAxes: [
+                                {
+                                    id: "height",
+                                    type: "linear",
+                                    position: "bottom",
+                                    gridLines: {
+                                        color: lineColor,
+                                        display: false,
+                                        drawBorder: false
+                                    },
+                                    ticks: {
+                                        autoSkip: true,
+                                        fontColor: textSoft,
+                                        maxRotation: 0,
+                                        maxTicksLimit: 8,
+                                        minRotation: 0,
+                                        callback: function (value) {
+                                            return "H " + _this.formatNumber(Math.round(value));
+                                        }
+                                    },
+                                    scaleLabel: {
+                                        display: true,
+                                        fontColor: textSoft,
+                                        labelString: "Block height"
+                                    }
+                                }
+                            ],
+                            yAxes: [
+                                {
+                                    id: "historicMetric",
+                                    type: "linear",
+                                    position: "left",
+                                    gridLines: {
+                                        color: lineColor,
+                                        drawBorder: false
+                                    },
+                                    ticks: {
+                                        beginAtZero: model.metric.key === "transactions_count",
+                                        fontColor: textMuted,
+                                        callback: function (value) {
+                                            return _this.formatHistoricStatsMetricValue(model.metric.key, null, value, true);
+                                        }
+                                    },
+                                    scaleLabel: {
+                                        display: true,
+                                        fontColor: textSoft,
+                                        labelString: model.metric.label
+                                    }
+                                }
+                            ]
+                        },
+                        tooltips: {
+                            mode: "index",
+                            intersect: false,
+                            backgroundColor: backgroundStrong,
+                            titleFontColor: textColor,
+                            bodyFontColor: textColor,
+                            footerFontColor: textMuted,
+                            xPadding: 10,
+                            yPadding: 10,
+                            cornerRadius: 10,
+                            caretPadding: 8,
+                            multiKeyBackground: lineStrong,
+                            callbacks: {
+                                title: function (items) {
+                                    var point = model.points[items[0].index];
+                                    return "Block " + _this.formatNumber(point.height);
+                                },
+                                afterTitle: function (items) {
+                                    var point = model.points[items[0].index];
+                                    return point.dateTime;
+                                },
+                                label: function (tooltipItem) {
+                                    var point = model.points[tooltipItem.index];
+                                    return model.metric.label + ": " + point.displayValue;
+                                },
+                                footer: function (items) {
+                                    var point = model.points[items[0].index];
+                                    return [
+                                        "Difficulty: " + _this.formatDifficulty(point.difficulty),
+                                        "Transactions: " + _this.formatNumber(point.transactionsCount),
+                                        "Block size: " + _this.formatBytes(point.blockSize)
+                                    ];
+                                }
+                            }
+                        },
+                        hover: {
+                            mode: "nearest",
+                            intersect: false,
+                            onHover: function (event, activeItems) {
+                                canvas.style.cursor = activeItems && activeItems.length ? "pointer" : "default";
+                            }
+                        },
+                        onClick: function (event, activeItems) {
+                            if (!activeItems || !activeItems.length) return;
+                            var active = activeItems[0];
+                            var index = active._index !== undefined ? active._index : active.index;
+                            var point = model.points[index];
+                            if (!point) return;
+                            _this.zoomHistoricStatsAroundHeight(point.height);
+                        }
+                    }
+                });
+
+                var navigatorModel = this.historicStatsNavigatorChart;
+                var navigatorCanvas = this.$refs.historicStatsNavigatorCanvas;
+                if (!navigatorModel || !navigatorCanvas || navigatorModel.points.length < 2) return;
+
+                var navigatorContext = navigatorCanvas.getContext("2d");
+                if (!navigatorContext) return;
+
+                this.charts.historicStatsNavigator = new window.Chart(navigatorContext, {
+                    type: "line",
+                    data: {
+                        labels: navigatorModel.labels,
+                        datasets: [
+                            {
+                                label: navigatorModel.metric.label,
+                                data: navigatorModel.points.map(function (point) {
+                                    return {
+                                        x: point.height,
+                                        y: point.value
+                                    };
+                                }),
+                                borderColor: chartColor,
+                                backgroundColor: "rgba(92, 162, 255, 0.14)",
+                                borderWidth: 1.5,
+                                fill: true,
+                                pointRadius: 0,
+                                pointHitRadius: 0
+                            }
+                        ]
+                    },
+                    options: {
+                        animation: {
+                            duration: 0
+                        },
+                        events: [],
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        legend: {
+                            display: false
+                        },
+                        elements: {
+                            line: {
+                                tension: 0
+                            }
+                        },
+                        layout: {
+                            padding: {
+                                bottom: 3,
+                                left: 0,
+                                right: 0,
+                                top: 3
+                            }
+                        },
+                        scales: {
+                            xAxes: [
+                                {
+                                    type: "linear",
+                                    display: false,
+                                    gridLines: {
+                                        display: false,
+                                        drawBorder: false
+                                    },
+                                    ticks: {
+                                        min: 0,
+                                        max: this.getTipHeight() || navigatorModel.points[navigatorModel.points.length - 1].height
+                                    }
+                                }
+                            ],
+                            yAxes: [
+                                {
+                                    display: false,
+                                    gridLines: {
+                                        display: false,
+                                        drawBorder: false
+                                    }
+                                }
+                            ]
+                        },
+                        tooltips: {
+                            enabled: false
+                        }
+                    }
+                });
+            },
             applyTheme: function () {
                 document.documentElement.setAttribute("data-theme", this.theme);
             },
@@ -1343,6 +2004,7 @@
                 safeStorageSet(STORAGE_THEME_KEY, this.theme);
                 this.applyTheme();
                 if (this.route.name === "home") this.scheduleDifficultyChartRender();
+                if (this.route.name === "charts") this.scheduleHistoricStatsChartRender();
             },
             toggleTheme: function () {
                 this.setTheme(this.theme === "dark" ? "light" : "dark");
@@ -1436,10 +2098,13 @@
                 var opts = options || {};
                 var token = ++this.routeRequestId;
                 if (this.route.name === "home") {
+                    this.destroyHistoricStatsChart();
                     if (this.route.query.height !== undefined) this.home.pageHeight = coerceInteger(this.route.query.height);
                     return this.loadHomeData(token, opts.background);
                 }
                 this.destroyDifficultyChart();
+                if (this.route.name === "charts") return this.loadHistoricStatsData(token, opts.background);
+                this.destroyHistoricStatsChart();
                 if (this.route.name === "block") return this.loadBlockData(token, opts.background);
                 if (this.route.name === "transaction") return this.loadTransactionData(token, opts.background);
                 if (this.route.name === "payment-id") return this.loadPaymentData(token, opts.background);
@@ -1898,6 +2563,95 @@
                         this.altView.error = readableError(error, "Could not load alternative blocks.");
                         this.altView.items = [];
                         this.altView.loading = false;
+                    }
+                    return false;
+                }
+            },
+            loadHistoricStatsData: async function (token, background) {
+                var hasExistingPoints = this.historicStats.points && this.historicStats.points.length;
+                if (!background || !hasExistingPoints) this.historicStats.loading = true;
+                this.historicStats.error = "";
+
+                try {
+                    await this.ensureStats();
+                    if (token !== this.routeRequestId) return false;
+
+                    var tipHeight = this.getTipHeight();
+                    if (tipHeight === null) throw new Error("Could not determine current chain height.");
+
+                    var requestedRange = this.getHistoricStatsRange(tipHeight);
+                    var result = null;
+                    var rawStats = [];
+                    var source = "sparse";
+                    var requestedPoints = 0;
+                    var sampleStep = 0;
+
+                    if (requestedRange && requestedRange.count <= HISTORIC_STATS_RANGE_LIMIT) {
+                        result = await rpcCall(this.api, "getstatsinrange", {
+                            start_height: requestedRange.start,
+                            end_height: requestedRange.end
+                        }, { bigIntFields: ["already_generated_coins"] });
+                        rawStats = result.stats || [];
+                        if (rawStats.length > HISTORIC_STATS_MAX_POINTS) rawStats = thinHistoricStats(rawStats);
+                        source = "range";
+                        requestedPoints = requestedRange.count;
+                        sampleStep = rawStats.length > 1
+                            ? Math.max(1, Math.round((requestedRange.end - requestedRange.start) / Math.max(rawStats.length - 1, 1)))
+                            : 0;
+                    } else if (requestedRange) {
+                        var rangeHeights = buildHistoricRangeSampleHeights(requestedRange.start, requestedRange.end);
+                        result = await rpcCall(this.api, "getstatsbyheights", { heights: rangeHeights }, { bigIntFields: ["already_generated_coins"] });
+                        rawStats = result.stats || [];
+                        source = "sparse-zoom";
+                        requestedPoints = rangeHeights.length;
+                        sampleStep = rangeHeights.length > 1 ? rangeHeights[1] - rangeHeights[0] : 0;
+                    } else {
+                        var heights = buildHistoricSampleHeights(tipHeight);
+                        requestedPoints = heights.length;
+                        sampleStep = heights.length > 1 ? heights[1] - heights[0] : 0;
+
+                        try {
+                            result = await rpcCall(this.api, "getstatsbyheights", { heights: heights }, { bigIntFields: ["already_generated_coins"] });
+                            rawStats = result.stats || [];
+                        } catch (sparseError) {
+                            var rangeSize = Math.min(HISTORIC_STATS_RANGE_LIMIT, tipHeight + 1);
+                            var startHeight = Math.max(tipHeight - rangeSize + 1, 0);
+                            result = await rpcCall(this.api, "getstatsinrange", {
+                                start_height: startHeight,
+                                end_height: tipHeight
+                            }, { bigIntFields: ["already_generated_coins"] });
+                            rawStats = thinHistoricStats(result.stats || []);
+                            source = "range-fallback";
+                            requestedPoints = rangeSize;
+                            sampleStep = rawStats.length > 1
+                                ? Math.max(1, Math.round((tipHeight - startHeight) / Math.max(rawStats.length - 1, 1)))
+                                : 0;
+                        }
+                    }
+
+                    if (token !== this.routeRequestId) return false;
+
+                    var points = normalizeHistoricStats(rawStats);
+                    if (!points.length) throw new Error("No historical stats returned by the node.");
+
+                    this.historicStats.points = points;
+                    if (source === "sparse" || source === "range-fallback" || !this.historicStats.navigatorPoints.length) {
+                        this.historicStats.navigatorPoints = points;
+                    }
+                    this.historicStats.source = source;
+                    this.historicStats.sampleStep = sampleStep;
+                    this.historicStats.requestedPoints = requestedPoints;
+                    this.historicStats.requestDuration = result && Number.isFinite(Number(result.duration)) ? Number(result.duration) : null;
+                    this.historicStats.loadedAt = Math.floor(Date.now() / 1000);
+                    this.historicStats.loading = false;
+                    this.scheduleHistoricStatsChartRender();
+                    return true;
+                } catch (error) {
+                    if (token === this.routeRequestId) {
+                        this.historicStats.error = readableError(error, "Could not load historical stats.");
+                        this.historicStats.points = [];
+                        this.destroyHistoricStatsChart();
+                        this.historicStats.loading = false;
                     }
                     return false;
                 }
@@ -2425,6 +3179,7 @@
         },
         beforeUnmount: function () {
             this.destroyDifficultyChart();
+            this.destroyHistoricStatsChart();
             if (this.toastTimerId) window.clearTimeout(this.toastTimerId);
             if (this.clockTimerId) window.clearInterval(this.clockTimerId);
             if (this.pollTimerId) window.clearInterval(this.pollTimerId);
