@@ -1560,12 +1560,13 @@
                                     };
                                 }),
                                 borderColor: primary,
-                                backgroundColor: primary,
+                                backgroundColor: "rgba(92, 162, 255, 0.12)",
                                 borderWidth: 3,
+                                lineTension: 0,
                                 pointRadius: 2,
                                 pointHoverRadius: 4,
                                 pointHitRadius: 8,
-                                fill: false
+                                fill: true
                             }
                         ]
                     },
