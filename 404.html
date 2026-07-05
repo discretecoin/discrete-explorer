@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Karbo Explorer Redirect</title>
+    <title>Discrete Explorer Redirect</title>
     <script>
         (function () {
             var path = window.location.pathname || '/';
             var isExplorerRoute = /^\/(?:block|transaction|payment-id|address|account|account-number)\/[^/]+\/?$/.test(path) ||
-                /^\/(?:nodes|alt-blocks|tools|broadcast-transaction|check-funds|check-payment|validate-address|verify-message|amount-converter|payment-id-tools|paper-wallet|settings)\/?$/.test(path);
+                /^\/(?:charts|nodes|alt-blocks|tools|broadcast-transaction|validate-address|verify-message|amount-converter|payment-id-tools|settings)\/?$/.test(path);
 
             if (!isExplorerRoute) {
                 return;
@@ -20,6 +20,6 @@
     </script>
 </head>
 <body>
-    <p>Redirecting back to the Karbo explorer...</p>
+    <p>Redirecting back to the Discrete explorer...</p>
 </body>
 </html>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 600 600">
+  <defs>
+    <style>
+      .st0 {
+        fill: none;
+        stroke: #5fe29f;
+        stroke-miterlimit: 10;
+        stroke-width: 40px;
+      }
+    </style>
+  </defs>
+  <circle class="st0" cx="297.4" cy="300.4" r="264.8"/>
+  <line class="st0" x1="300.4" y1="35.2" x2="300.4" y2="564.8"/>
+  <line class="st0" x1="211.1" y1="50.4" x2="211.1" y2="550.8"/>
+  <line class="st0" x1="124" y1="100.2" x2="124" y2="500.6"/>
+</svg>

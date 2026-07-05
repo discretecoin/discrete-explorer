@@ -21,7 +21,7 @@ const mimeTypes = {
 
 const spaRoutePatterns = [
     /^\/(?:block|transaction|payment-id|address|account|account-number)\/[^/]+\/?$/i,
-    /^\/(?:nodes|charts|alt-blocks|tools|broadcast-transaction|check-funds|check-payment|validate-address|verify-message|amount-converter|payment-id-tools|paper-wallet|settings)\/?$/i
+    /^\/(?:nodes|charts|alt-blocks|tools|broadcast-transaction|validate-address|verify-message|amount-converter|payment-id-tools|settings)\/?$/i
 ];
 
 function isSpaRoute(pathname) {
@@ -188,5 +188,5 @@ const server = http.createServer(function (request, response) {
 });
 
 server.listen(port, host, function () {
-    console.log("Karbo explorer dev server running at http://" + host + ":" + port);
+    console.log("Discrete explorer dev server running at http://" + host + ":" + port);
 });

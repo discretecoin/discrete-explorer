@@ -4,8 +4,8 @@
     if (!window.Vue) return;
 
     var createApp = window.Vue.createApp;
-    var STORAGE_THEME_KEY = "karbo_explorer_theme_v2";
-    var STORAGE_API_KEY = "karbo_explorer_api_v2";
+    var STORAGE_THEME_KEY = "discrete_explorer_theme_v1";
+    var STORAGE_API_KEY = "discrete_explorer_api_v1";
     var COIN_UNIT_STRING = String(window.coinUnits || "1000000000000");
     var COIN_UNIT_BIGINT = BigInt(COIN_UNIT_STRING);
     var COIN_DECIMALS = Math.max(COIN_UNIT_STRING.length - 1, 0);
@@ -29,23 +29,30 @@
     ];
     var ADDRESS_PATTERN = window.addressPattern instanceof RegExp
         ? window.addressPattern
-        : /^K[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{94}$/;
+        : /^(disc|tdisc)1[02-9ac-hj-np-z]{1000,}$/;
     var ACCOUNT_NUMBER_PATTERN = window.accountNumberPattern instanceof RegExp
         ? window.accountNumberPattern
         : /^\d+-\d+-[0-9A-Za-z]$/;
+    var ACCOUNT_NUMBER_WITH_INDEX_PATTERN = window.accountNumberWithIndexPattern instanceof RegExp
+        ? window.accountNumberWithIndexPattern
+        : /^\d+-\d+-\d+-[0-9A-Za-z]$/;
+    // Discrete PQ constants (must match CryptoNoteConfig / TransactionExtra):
+    var PQ_VIEW_PUBKEY_BYTES = 1184;   // ML-KEM-768 public key
+    var PQ_SPEND_PUBKEY_BYTES = 1952;  // ML-DSA-65 public key
+    var PQ_SIGNATURE_BYTES = 3309;     // ML-DSA-65 signature
+    var TX_TYPE_COINBASE = 0;
+    var TX_TYPE_TRANSFER = 1;
+    var TX_TYPE_FREE_REG = 3;
     var SIMPLE_ROUTE_NAMES = [
         "nodes",
         "charts",
         "alt-blocks",
         "tools",
         "broadcast-transaction",
-        "check-funds",
-        "check-payment",
         "validate-address",
         "verify-message",
         "amount-converter",
         "payment-id-tools",
-        "paper-wallet",
         "settings"
     ];
     var SCRIPT_PROMISES = Object.create(null);
@@ -126,29 +133,153 @@
         var raw = String(value || "").trim();
         if (!raw) return "";
         var parts = raw.split("-");
-        if (parts.length !== 3) return raw;
-        return "".concat(parts[0], "-").concat(parts[1], "-").concat(String(parts[2] || "").toUpperCase());
+        if (parts.length !== 3 && parts.length !== 4) return raw;
+        var check = String(parts[parts.length - 1] || "").toUpperCase();
+        return parts.slice(0, parts.length - 1).join("-") + "-" + check;
     }
 
+    // Parses both account-number forms: H-I-C (base account) and H-I-T-C
+    // (deposit subaddress, T = routing index). C is Luhn mod-36 over the
+    // concatenated decimal digits of the preceding fields.
     function parseAccountNumber(value) {
         var normalized = normalizeAccountNumber(value);
-        if (!ACCOUNT_NUMBER_PATTERN.test(normalized)) return null;
+        var withIndex = ACCOUNT_NUMBER_WITH_INDEX_PATTERN.test(normalized);
+        if (!withIndex && !ACCOUNT_NUMBER_PATTERN.test(normalized)) return null;
         var parts = normalized.split("-");
         var blockHeight = coerceInteger(parts[0]);
         var txIndex = coerceInteger(parts[1]);
+        var subaddressIndex = withIndex ? coerceInteger(parts[2]) : null;
         if (blockHeight === null || blockHeight < 0 || txIndex === null || txIndex < 0) return null;
+        if (withIndex && (subaddressIndex === null || subaddressIndex < 0)) return null;
         return {
             value: normalized,
             blockHeight: blockHeight,
             txIndex: txIndex,
-            checkDigit: parts[2]
+            subaddressIndex: subaddressIndex,
+            checkDigit: parts[parts.length - 1],
+            luhnPayload: withIndex
+                ? String(parts[0]) + String(parts[1]) + String(parts[2])
+                : String(parts[0]) + String(parts[1])
         };
     }
 
     function isValidAccountNumber(value) {
         var parsed = parseAccountNumber(value);
         if (!parsed) return false;
-        return luhnMod36Generate(String(parsed.blockHeight) + String(parsed.txIndex)) === parsed.checkDigit;
+        return luhnMod36Generate(parsed.luhnPayload) === parsed.checkDigit;
+    }
+
+    function isAccountNumberCandidate(value) {
+        var normalized = normalizeAccountNumber(value);
+        return ACCOUNT_NUMBER_PATTERN.test(normalized) || ACCOUNT_NUMBER_WITH_INDEX_PATTERN.test(normalized);
+    }
+
+    // --- bech32m (BIP-350) decoding for Discrete PQ addresses -------------
+    // Address layout after 5->8 bit regrouping:
+    //   version (1) || varint(networkPrefix) || viewPub (1184) || spendPub (1952) || checksum (4)
+    // The trailing 4-byte checksum is consensus data (SHA3-256 prefix) verified
+    // by wallets/nodes; here the bech32m checksum already guarantees integrity.
+    var BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+    var BECH32M_CONST = 0x2bc830a3;
+
+    function bech32Polymod(values) {
+        var generator = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+        var checksum = 1;
+        for (var index = 0; index < values.length; index += 1) {
+            var top = checksum >>> 25;
+            checksum = ((checksum & 0x1ffffff) << 5) ^ values[index];
+            for (var bit = 0; bit < 5; bit += 1) {
+                if ((top >>> bit) & 1) checksum ^= generator[bit];
+            }
+        }
+        return checksum >>> 0;
+    }
+
+    function bech32HrpExpand(hrp) {
+        var expanded = [];
+        var index;
+        for (index = 0; index < hrp.length; index += 1) expanded.push(hrp.charCodeAt(index) >>> 5);
+        expanded.push(0);
+        for (index = 0; index < hrp.length; index += 1) expanded.push(hrp.charCodeAt(index) & 31);
+        return expanded;
+    }
+
+    function convertBits(data, fromBits, toBits, pad) {
+        var accumulator = 0;
+        var bits = 0;
+        var result = [];
+        var maxValue = (1 << toBits) - 1;
+        for (var index = 0; index < data.length; index += 1) {
+            var value = data[index];
+            if (value < 0 || value >>> fromBits !== 0) return null;
+            accumulator = (accumulator << fromBits) | value;
+            bits += fromBits;
+            while (bits >= toBits) {
+                bits -= toBits;
+                result.push((accumulator >>> bits) & maxValue);
+            }
+        }
+        if (pad) {
+            if (bits > 0) result.push((accumulator << (toBits - bits)) & maxValue);
+        } else if (bits >= fromBits || ((accumulator << (toBits - bits)) & maxValue)) {
+            return null;
+        }
+        return result;
+    }
+
+    // Decodes and validates a Discrete PQ address. Returns null when the string
+    // is not a well-formed bech32m address with the expected key lengths.
+    function decodePqAddress(value) {
+        var raw = String(value || "").trim();
+        if (!raw) return null;
+        var hasLower = raw !== raw.toUpperCase();
+        var hasUpper = raw !== raw.toLowerCase();
+        if (hasLower && hasUpper) return null;
+        raw = raw.toLowerCase();
+        var separator = raw.lastIndexOf("1");
+        if (separator < 1 || separator + 7 > raw.length) return null;
+        var hrp = raw.slice(0, separator);
+        if (hrp !== "disc" && hrp !== "tdisc") return null;
+        var data = [];
+        for (var index = separator + 1; index < raw.length; index += 1) {
+            var charValue = BECH32_CHARSET.indexOf(raw.charAt(index));
+            if (charValue === -1) return null;
+            data.push(charValue);
+        }
+        if (bech32Polymod(bech32HrpExpand(hrp).concat(data)) !== BECH32M_CONST) return null;
+        var bytes = convertBits(data.slice(0, data.length - 6), 5, 8, false);
+        if (!bytes || bytes.length < 2 + PQ_VIEW_PUBKEY_BYTES + PQ_SPEND_PUBKEY_BYTES + 4) return null;
+        var offset = 0;
+        var version = bytes[offset];
+        offset += 1;
+        var networkPrefix = 0;
+        var shift = 0;
+        while (offset < bytes.length) {
+            var byteValue = bytes[offset];
+            offset += 1;
+            networkPrefix += (byteValue & 0x7f) * Math.pow(2, shift);
+            shift += 7;
+            if ((byteValue & 0x80) === 0) break;
+            if (shift > 63) return null;
+        }
+        if (bytes.length - offset !== PQ_VIEW_PUBKEY_BYTES + PQ_SPEND_PUBKEY_BYTES + 4) return null;
+        var viewPub = bytes.slice(offset, offset + PQ_VIEW_PUBKEY_BYTES);
+        offset += PQ_VIEW_PUBKEY_BYTES;
+        var spendPub = bytes.slice(offset, offset + PQ_SPEND_PUBKEY_BYTES);
+        return {
+            hrp: hrp,
+            isTestnet: hrp === "tdisc",
+            network: hrp === "tdisc" ? "testnet" : "mainnet",
+            version: version,
+            networkPrefix: networkPrefix,
+            viewPublicKey: bytesToHex(viewPub),
+            spendPublicKey: bytesToHex(spendPub)
+        };
+    }
+
+    function isPqAddressCandidate(value) {
+        var raw = String(value || "").trim().toLowerCase();
+        return ADDRESS_PATTERN.test(raw);
     }
 
     function coerceInteger(value) {
@@ -251,7 +382,7 @@
         }
 
         if (negative) rendered = "-" + rendered;
-        if (withSymbol) rendered += " " + String(window.symbol || "KRB");
+        if (withSymbol) rendered += " " + String(window.symbol || "XDS");
         return rendered;
     }
 
@@ -312,40 +443,69 @@
         return bytesToHex(bytes).slice(0, size);
     }
 
-    function parseAccountRegistrationExtra(rawExtra) {
+    // Walks Discrete tx_extra (hex). Fixed layouts per tag:
+    //   0x00 padding (zero byte), 0x01 legacy pubkey (32 B),
+    //   0x02 nonce (1 size byte + data; payment id when it starts with 0x00),
+    //   0x04 legacy ECC registration (64 B, never on-chain in Discrete),
+    //   0x05 PQ account registration (viewPub 1184 B + spendPub 1952 B),
+    //   0x06 anti-spam PoW (ref block hash 32 B + nonce 8 B),
+    //   0x07 coinbase miner spend pubkey (1952 B).
+    function parsePqExtra(rawExtra) {
+        var result = { registration: null, minerSpendPublicKey: "" };
         var raw = normalizeHex(rawExtra);
-        if (!raw || raw.length < 130) return null;
         var cursor = 0;
 
         while (cursor + 2 <= raw.length) {
             var tag = raw.slice(cursor, cursor + 2);
+            cursor += 2;
+
+            if (tag === "00") continue;
 
             if (tag === "01") {
-                if (cursor + 66 > raw.length) return null;
-                cursor += 66;
+                cursor += 64;
                 continue;
             }
 
             if (tag === "02") {
-                if (cursor + 4 > raw.length) return null;
-                var nonceLength = parseInt(raw.slice(cursor + 2, cursor + 4), 16);
-                if (!Number.isFinite(nonceLength) || nonceLength < 0) return null;
-                cursor += 4 + nonceLength * 2;
+                if (cursor + 2 > raw.length) break;
+                var nonceLength = parseInt(raw.slice(cursor, cursor + 2), 16);
+                if (!Number.isFinite(nonceLength) || nonceLength < 0) break;
+                cursor += 2 + nonceLength * 2;
                 continue;
             }
 
             if (tag === "04") {
-                if (cursor + 130 > raw.length) return null;
-                return {
-                    spendPublicKey: raw.slice(cursor + 2, cursor + 66),
-                    viewPublicKey: raw.slice(cursor + 66, cursor + 130)
+                cursor += 128;
+                continue;
+            }
+
+            if (tag === "05") {
+                var registrationHexLength = (PQ_VIEW_PUBKEY_BYTES + PQ_SPEND_PUBKEY_BYTES) * 2;
+                if (cursor + registrationHexLength > raw.length) break;
+                result.registration = {
+                    viewPublicKey: raw.slice(cursor, cursor + PQ_VIEW_PUBKEY_BYTES * 2),
+                    spendPublicKey: raw.slice(cursor + PQ_VIEW_PUBKEY_BYTES * 2, cursor + registrationHexLength)
                 };
+                cursor += registrationHexLength;
+                continue;
+            }
+
+            if (tag === "06") {
+                cursor += 80;
+                continue;
+            }
+
+            if (tag === "07") {
+                if (cursor + PQ_SPEND_PUBKEY_BYTES * 2 > raw.length) break;
+                result.minerSpendPublicKey = raw.slice(cursor, cursor + PQ_SPEND_PUBKEY_BYTES * 2);
+                cursor += PQ_SPEND_PUBKEY_BYTES * 2;
+                continue;
             }
 
             break;
         }
 
-        return null;
+        return result;
     }
 
     function luhnMod36Generate(input) {
@@ -647,9 +807,6 @@
         if (hash === "alt-blocks" || hash === "alt_blocks") return normalizeRoute({ name: "alt-blocks" });
         if (hash === "tools") return normalizeRoute({ name: "tools" });
         if (hash === "pushtx") return normalizeRoute({ name: "broadcast-transaction" });
-        if (hash === "check_funds") return normalizeRoute({ name: "check-funds" });
-        if (hash === "check_payment") return normalizeRoute({ name: "check-payment" });
-        if (hash === "paperwallet") return normalizeRoute({ name: "paper-wallet" });
         if (hash === "validate_address") return normalizeRoute({ name: "validate-address" });
         if (hash === "verify_message") return normalizeRoute({ name: "verify-message" });
         if (hash === "amount_converter") return normalizeRoute({ name: "amount-converter" });
@@ -735,13 +892,6 @@
         });
     }
 
-    async function fetchNodeFee(apiUrl) {
-        return fetchJson(buildApiRequestUrl(apiUrl, "/feeaddress"), {
-            headers: { Accept: "application/json" },
-            timeoutMs: 3500
-        });
-    }
-
     async function sendRawTransaction(apiUrl, transactionHex) {
         return fetchJson(buildApiRequestUrl(apiUrl, "/sendrawtransaction"), {
             method: "POST",
@@ -759,7 +909,7 @@
         var requestOptions = Object.assign({
             method: "POST",
             headers: { Accept: "application/json", "Content-Type": "application/json" },
-            body: JSON.stringify({ jsonrpc: "2.0", id: "karbo_explorer", method: method, params: params || {} })
+            body: JSON.stringify({ jsonrpc: "2.0", id: "discrete_explorer", method: method, params: params || {} })
         }, options || {});
         var payload = await fetchJson(buildApiRequestUrl(apiUrl, "/json_rpc"), requestOptions);
         if (payload && payload.error) throw new Error(payload.error.message || "RPC request failed.");
@@ -807,13 +957,10 @@
                 ],
                 toolNav: [
                     { name: "broadcast-transaction", label: "Broadcast tx", icon: "fa-broadcast-tower", description: "Submit raw transaction hex to the network." },
-                    { name: "check-funds", label: "Check proof", icon: "fa-piggy-bank", description: "Verify a reserve proof and reported balance." },
-                    { name: "check-payment", label: "Check payment", icon: "fa-receipt", description: "Verify received outputs for a transaction." },
-                    { name: "validate-address", label: "Validate address", icon: "fa-check-circle", description: "Validate an address and inspect public keys." },
-                    { name: "verify-message", label: "Verify message", icon: "fa-envelope-open-text", description: "Verify a signed message against an address." },
-                    { name: "amount-converter", label: "Amount converter", icon: "fa-exchange-alt", description: "Convert atomic units to readable KRB amounts." },
-                    { name: "payment-id-tools", label: "Payment ID tools", icon: "fa-fingerprint", description: "Generate, encode, and decode payment IDs." },
-                    { name: "paper-wallet", label: "Paper wallet", icon: "fa-wallet", description: "Generate an offline paper wallet in-browser." }
+                    { name: "validate-address", label: "Validate address", icon: "fa-check-circle", description: "Validate an address or account number." },
+                    { name: "verify-message", label: "Verify message", icon: "fa-envelope-open-text", description: "Verify a post-quantum signed message." },
+                    { name: "amount-converter", label: "Amount converter", icon: "fa-exchange-alt", description: "Convert atomic units to readable XDS amounts." },
+                    { name: "payment-id-tools", label: "Payment ID tools", icon: "fa-fingerprint", description: "Generate, encode, and decode payment IDs." }
                 ],
                 home: {
                     loading: false,
@@ -865,25 +1012,6 @@
                     error: "",
                     success: ""
                 },
-                reserveTool: {
-                    address: "",
-                    message: "",
-                    signature: "",
-                    height: "",
-                    loading: false,
-                    error: "",
-                    result: null
-                },
-                paymentCheckTool: {
-                    txHash: "",
-                    keyType: "tx_key",
-                    secret: "",
-                    address: "",
-                    loading: false,
-                    error: "",
-                    result: null,
-                    txInfo: null
-                },
                 validateTool: {
                     address: "",
                     loading: false,
@@ -906,25 +1034,12 @@
                     paymentId: "",
                     memo: ""
                 },
-                paperWallet: {
-                    loading: false,
-                    error: "",
-                    wallet: null
-                },
                 charts: {
                     difficulty: null,
                     historicStats: null,
                     historicStatsNavigator: null
                 },
-                activeTxTab: "outputs",
-                txVerifier: {
-                    keyType: "tx_key",
-                    secret: "",
-                    address: "",
-                    loading: false,
-                    error: "",
-                    result: null
-                }
+                activeTxTab: "outputs"
             };
         },
         computed: {
@@ -957,8 +1072,36 @@
             },
             txFeeText: function () {
                 if (!this.txView.tx) return "--";
-                if (this.txView.tx.inputs && this.txView.tx.inputs[0] && this.txView.tx.inputs[0].type === "ff") return "Coinbase";
-                return this.formatCoins(this.txView.tx.fee, 12);
+                var txType = coerceInteger(this.txView.tx.txType);
+                if (txType === TX_TYPE_COINBASE) return "Coinbase";
+                if (txType === TX_TYPE_FREE_REG) return "Free";
+                return this.formatCoins(this.txView.tx.fee);
+            },
+            transactionRawExtra: function () {
+                if (!this.txView.tx || !this.txView.tx.extra) return "";
+                return normalizeHex(this.txView.tx.extra.raw || "");
+            },
+            transactionMinerSpendPub: function () {
+                if (!this.txView.tx) return "";
+                if (coerceInteger(this.txView.tx.txType) !== TX_TYPE_COINBASE) return "";
+                return parsePqExtra(this.transactionRawExtra).minerSpendPublicKey;
+            },
+            transactionSignatureSummary: function () {
+                if (!this.txView.tx) return "";
+                if (coerceInteger(this.txView.tx.txType) !== TX_TYPE_TRANSFER) return "";
+                var inputCount = (this.txView.tx.inputs || []).length;
+                if (!inputCount) return "";
+                return "This transfer carries " + this.formatNumber(inputCount)
+                    + " ML-DSA-65 signature" + (inputCount === 1 ? "" : "s")
+                    + " (one per input, " + this.formatNumber(PQ_SIGNATURE_BYTES)
+                    + " bytes each), verified by every node. Signatures are not included in the RPC detail payload.";
+            },
+            blockMinerSignatureHex: function () {
+                if (!this.blockView.block) return "";
+                var signature = this.blockView.block.minerSignature;
+                if (Array.isArray(signature)) return bytesToHex(signature);
+                var normalized = normalizeHex(signature);
+                return /^0*$/.test(normalized) ? "" : normalized;
             },
             transactionPaymentId: function () {
                 if (!this.txView.tx || !this.txView.tx.paymentId) return "";
@@ -1006,7 +1149,7 @@
                 var points = blocks.map(function (block) {
                     var height = coerceInteger(block.height) || 0;
                     var timestamp = coerceInteger(block.timestamp) || 0;
-                    var chartTimestamp = timestamp > 0 ? timestamp : 1464595200;
+                    var chartTimestamp = timestamp > 0 ? timestamp : 1781619660;
                     return {
                         height: height,
                         timestamp: timestamp,
@@ -1205,12 +1348,26 @@
                     return url || "Unknown node";
                 }
             },
-            hasDisplayableSignature: function (signature) {
-                var normalized = normalizeHex(signature);
-                return Boolean(normalized) && !/^0+$/.test(normalized);
+            txTypeName: function (txType) {
+                var normalized = coerceInteger(txType);
+                if (normalized === TX_TYPE_COINBASE) return "Coinbase";
+                if (normalized === TX_TYPE_TRANSFER) return "Transfer";
+                if (normalized === TX_TYPE_FREE_REG) return "Account registration";
+                return "Unknown (" + String(txType) + ")";
             },
-            displayBlockSignature: function (signature) {
-                return this.hasDisplayableSignature(signature) ? String(signature) : "\u2014";
+            transactionFeeCell: function (transaction) {
+                if (!transaction) return "--";
+                var txType = coerceInteger(transaction.txType);
+                if (txType === TX_TYPE_COINBASE || txType === TX_TYPE_FREE_REG) return "\u2014";
+                return this.formatCoins(transaction.fee, false);
+            },
+            coerceNumber: function (value) {
+                return coerceInteger(value) || 0;
+            },
+            shortHash: function (hash) {
+                var normalized = String(hash || "").trim();
+                if (normalized.length <= 16) return normalized;
+                return normalized.slice(0, 8) + "\u2026" + normalized.slice(-8);
             },
             linkTo: function (route) {
                 return buildRouteUrl(route);
@@ -1310,7 +1467,7 @@
                 var rendered = numeric.toLocaleString(undefined, {
                     maximumFractionDigits: numeric >= 1000 ? 0 : numeric >= 10 ? 2 : 4
                 });
-                return "".concat(rendered, " ").concat(String(window.symbol || "KRB"));
+                return "".concat(rendered, " ").concat(String(window.symbol || "XDS"));
             },
             getHistoricStatsMetricValue: function (point, metricKey) {
                 if (!point) return NaN;
@@ -1470,19 +1627,15 @@
                     if (!registration.accountNumber) return transaction;
 
                     try {
-                        var resolved = await rpcCall(this.api, "resolveaccountnumber", { account_number: registration.accountNumber });
+                        var resolved = await rpcCall(this.api, "resolvepqaccount", {
+                            block_height: registration.blockHeight,
+                            tx_index: txIndex
+                        });
                         if (token !== this.routeRequestId) return null;
-                        registration.address = resolved && resolved.address ? String(resolved.address).trim() : "";
-
-                        if (registration.address) {
-                            try {
-                                var validation = await rpcCall(this.api, "validateaddress", { address: registration.address });
-                                if (token !== this.routeRequestId) return null;
-                                registration.addressKeysMatch = Boolean(
-                                    (validation.view_public_key || "") === registration.viewPublicKey &&
-                                    (validation.spend_public_key || "") === registration.spendPublicKey
-                                );
-                            } catch (validationError) {}
+                        registration.resolved = coerceBoolean(resolved.found);
+                        if (registration.resolved && registration.viewPublicKey && registration.spendPublicKey) {
+                            registration.keysMatch = normalizeHex(resolved.view_pub) === normalizeHex(registration.viewPublicKey)
+                                && normalizeHex(resolved.spend_pub) === normalizeHex(registration.spendPublicKey);
                         }
                     } catch (resolveError) {}
                 } catch (blockError) {}
@@ -1535,13 +1688,13 @@
                 this.destroyDifficultyChart();
 
                 var styles = window.getComputedStyle(document.documentElement);
-                var primary = styles.getPropertyValue("--primary").trim() || "#5ca2ff";
-                var lineColor = styles.getPropertyValue("--line").trim() || "rgba(137, 175, 255, 0.16)";
-                var lineStrong = styles.getPropertyValue("--line-strong").trim() || "rgba(137, 175, 255, 0.24)";
-                var textColor = styles.getPropertyValue("--text").trim() || "#edf4ff";
-                var textMuted = styles.getPropertyValue("--text-muted").trim() || "#9fb2ca";
-                var textSoft = styles.getPropertyValue("--text-soft").trim() || "#7f93ac";
-                var backgroundStrong = styles.getPropertyValue("--bg-card-strong").trim() || "rgba(17, 29, 48, 0.96)";
+                var primary = styles.getPropertyValue("--primary").trim() || "#5fe29f";
+                var lineColor = styles.getPropertyValue("--line").trim() || "rgba(154, 167, 178, 0.16)";
+                var lineStrong = styles.getPropertyValue("--line-strong").trim() || "rgba(154, 167, 178, 0.24)";
+                var textColor = styles.getPropertyValue("--text").trim() || "#e4e9ec";
+                var textMuted = styles.getPropertyValue("--text-muted").trim() || "#9aa7b2";
+                var textSoft = styles.getPropertyValue("--text-soft").trim() || "#7c8a94";
+                var backgroundStrong = styles.getPropertyValue("--bg-card-strong").trim() || "rgba(21, 31, 36, 0.96)";
                 var context = canvas.getContext("2d");
                 if (!context) return;
 
@@ -1560,7 +1713,7 @@
                                     };
                                 }),
                                 borderColor: primary,
-                                backgroundColor: "rgba(92, 162, 255, 0.12)",
+                                backgroundColor: "rgba(95, 226, 159, 0.12)",
                                 borderWidth: 3,
                                 lineTension: 0,
                                 pointRadius: 2,
@@ -1748,17 +1901,17 @@
                 this.destroyHistoricStatsChart();
 
                 var styles = window.getComputedStyle(document.documentElement);
-                var primary = styles.getPropertyValue("--primary").trim() || "#5ca2ff";
+                var primary = styles.getPropertyValue("--primary").trim() || "#5fe29f";
                 var accent = styles.getPropertyValue("--accent").trim() || "#f7b548";
                 var success = styles.getPropertyValue("--success").trim() || "#39d98a";
                 var warning = styles.getPropertyValue("--warning").trim() || "#f6c453";
                 var danger = styles.getPropertyValue("--danger").trim() || "#ff6b79";
-                var lineColor = styles.getPropertyValue("--line").trim() || "rgba(137, 175, 255, 0.16)";
-                var lineStrong = styles.getPropertyValue("--line-strong").trim() || "rgba(137, 175, 255, 0.24)";
-                var textColor = styles.getPropertyValue("--text").trim() || "#edf4ff";
-                var textMuted = styles.getPropertyValue("--text-muted").trim() || "#9fb2ca";
-                var textSoft = styles.getPropertyValue("--text-soft").trim() || "#7f93ac";
-                var backgroundStrong = styles.getPropertyValue("--bg-card-strong").trim() || "rgba(17, 29, 48, 0.96)";
+                var lineColor = styles.getPropertyValue("--line").trim() || "rgba(154, 167, 178, 0.16)";
+                var lineStrong = styles.getPropertyValue("--line-strong").trim() || "rgba(154, 167, 178, 0.24)";
+                var textColor = styles.getPropertyValue("--text").trim() || "#e4e9ec";
+                var textMuted = styles.getPropertyValue("--text-muted").trim() || "#9aa7b2";
+                var textSoft = styles.getPropertyValue("--text-soft").trim() || "#7c8a94";
+                var backgroundStrong = styles.getPropertyValue("--bg-card-strong").trim() || "rgba(21, 31, 36, 0.96)";
                 var metricColors = {
                     difficulty: primary,
                     hashrate: success,
@@ -1935,7 +2088,7 @@
                                     };
                                 }),
                                 borderColor: chartColor,
-                                backgroundColor: "rgba(92, 162, 255, 0.14)",
+                                backgroundColor: "rgba(95, 226, 159, 0.14)",
                                 borderWidth: 1.5,
                                 fill: true,
                                 pointRadius: 0,
@@ -2312,16 +2465,17 @@
                     transaction.outputs = Array.isArray(transaction.outputs) ? transaction.outputs : [];
                     transaction.signatures = Array.isArray(transaction.signatures) ? transaction.signatures : [];
                     transaction.extra = transaction.extra && typeof transaction.extra === "object" ? transaction.extra : {};
-                    var registrationKeys = parseAccountRegistrationExtra(transaction.extra.raw || "");
-                    transaction.accountRegistration = registrationKeys ? {
-                        spendPublicKey: registrationKeys.spendPublicKey,
-                        viewPublicKey: registrationKeys.viewPublicKey,
+                    var extraFields = parsePqExtra(transaction.extra.raw || "");
+                    var isRegistrationType = coerceInteger(transaction.txType) === TX_TYPE_FREE_REG;
+                    transaction.accountRegistration = (extraFields.registration || isRegistrationType) ? {
+                        spendPublicKey: extraFields.registration ? extraFields.registration.spendPublicKey : "",
+                        viewPublicKey: extraFields.registration ? extraFields.registration.viewPublicKey : "",
                         blockHeight: coerceInteger(transaction.blockIndex),
                         txIndex: null,
                         accountNumber: "",
-                        address: "",
                         confirmed: Boolean(transaction.inBlockchain),
-                        addressKeysMatch: null
+                        resolved: null,
+                        keysMatch: null
                     } : null;
                     if (transaction.accountRegistration && transaction.inBlockchain) {
                         var enrichedTransaction = await this.enrichTransactionAccountRegistration(transaction, token);
@@ -2332,9 +2486,6 @@
                     this.txView.tx = transaction;
                     this.txView.loading = false;
                     this.activeTxTab = "outputs";
-                    this.txVerifier.loading = false;
-                    this.txVerifier.error = "";
-                    this.txVerifier.result = null;
                     return true;
                 } catch (error) {
                     if (token === this.routeRequestId) {
@@ -2371,33 +2522,54 @@
                 this.addressView.accountNumberError = "";
                 try {
                     var address = this.route.params.address;
-                    var validationPromise = rpcCall(this.api, "validateaddress", { address: address });
-                    var accountNumberPromise = rpcCall(this.api, "getaccountnumber", { address: address }).catch(function (error) {
-                        return { __error: error };
-                    });
-                    var result = await validationPromise;
+                    // The address is self-validating: decode bech32m locally to get
+                    // the embedded ML-KEM view key and ML-DSA spend key.
+                    var decoded = decodePqAddress(address);
+                    var nodeConfirmed = null;
+                    try {
+                        var validation = await rpcCall(this.api, "validateaddress", { address: address });
+                        nodeConfirmed = coerceBoolean(validation.is_valid);
+                    } catch (validationError) {}
                     if (token !== this.routeRequestId) return false;
-                    var accountNumberResult = await accountNumberPromise;
-                    if (token !== this.routeRequestId) return false;
+
                     var accountNumber = null;
                     var accountNumberError = "";
-                    if (accountNumberResult && accountNumberResult.__error) {
-                        var lookupMessage = readableError(accountNumberResult.__error, "Could not load the canonical account number for that address.");
-                        if (!/No account number registered/i.test(lookupMessage)) {
-                            accountNumberError = lookupMessage;
+                    if (decoded) {
+                        // The on-chain registry is keyed by the identity's raw keys.
+                        try {
+                            var accountResult = await rpcCall(this.api, "getpqaccount", {
+                                view_pub: decoded.viewPublicKey,
+                                spend_pub: decoded.spendPublicKey
+                            });
+                            if (token !== this.routeRequestId) return false;
+                            if (coerceBoolean(accountResult.registered)) {
+                                var blockHeight = coerceInteger(accountResult.block_height);
+                                var txIndex = coerceInteger(accountResult.tx_index);
+                                accountNumber = {
+                                    accountNumber: this.computeAccountNumber(blockHeight, txIndex),
+                                    blockHeight: blockHeight,
+                                    txIndex: txIndex
+                                };
+                            }
+                        } catch (accountError) {
+                            accountNumberError = readableError(accountError, "Could not query the account-number registry.");
                         }
-                    } else if (accountNumberResult && accountNumberResult.account_number) {
-                        var parsedAccountNumber = parseAccountNumber(accountNumberResult.account_number);
-                        accountNumber = {
-                            accountNumber: normalizeAccountNumber(accountNumberResult.account_number),
-                            blockHeight: parsedAccountNumber ? parsedAccountNumber.blockHeight : null,
-                            txIndex: parsedAccountNumber ? parsedAccountNumber.txIndex : null
-                        };
                     }
-                    this.addressView.result = {
-                        isValid: coerceBoolean(result.is_valid),
-                        viewPublicKey: result.view_public_key || "",
-                        spendPublicKey: result.spend_public_key || ""
+
+                    this.addressView.result = decoded ? {
+                        isValid: true,
+                        network: decoded.network,
+                        hrp: decoded.hrp,
+                        nodeConfirmed: nodeConfirmed,
+                        viewPublicKey: decoded.viewPublicKey,
+                        spendPublicKey: decoded.spendPublicKey
+                    } : {
+                        isValid: false,
+                        network: "",
+                        hrp: "",
+                        nodeConfirmed: nodeConfirmed,
+                        viewPublicKey: "",
+                        spendPublicKey: ""
                     };
                     this.addressView.accountNumber = accountNumber;
                     this.addressView.accountNumberError = accountNumberError;
@@ -2420,28 +2592,21 @@
                 try {
                     var parsed = parseAccountNumber(this.route.params.accountNumber);
                     if (!parsed) throw new Error("Enter a valid account number like 123456-0-A.");
-                    var resolved = await rpcCall(this.api, "resolveaccountnumber", { account_number: parsed.value });
+                    if (!isValidAccountNumber(parsed.value)) throw new Error("The check character does not match — the account number has a typo.");
+                    var resolved = await rpcCall(this.api, "resolvepqaccount", {
+                        block_height: parsed.blockHeight,
+                        tx_index: parsed.txIndex
+                    });
                     if (token !== this.routeRequestId) return false;
-                    var address = resolved && resolved.address ? String(resolved.address).trim() : "";
-                    var accountData = {
+                    this.accountNumberView.result = {
                         accountNumber: parsed.value,
                         blockHeight: parsed.blockHeight,
                         txIndex: parsed.txIndex,
-                        address: address,
-                        viewPublicKey: "",
-                        spendPublicKey: "",
-                        isValidAddress: false
+                        subaddressIndex: parsed.subaddressIndex,
+                        found: coerceBoolean(resolved.found),
+                        viewPublicKey: resolved.view_pub || "",
+                        spendPublicKey: resolved.spend_pub || ""
                     };
-                    if (address) {
-                        try {
-                            var validation = await rpcCall(this.api, "validateaddress", { address: address });
-                            if (token !== this.routeRequestId) return false;
-                            accountData.isValidAddress = coerceBoolean(validation.is_valid);
-                            accountData.viewPublicKey = validation.view_public_key || "";
-                            accountData.spendPublicKey = validation.spend_public_key || "";
-                        } catch (validationError) {}
-                    }
-                    this.accountNumberView.result = accountData;
                     this.accountNumberView.loading = false;
                     return true;
                 } catch (error) {
@@ -2452,14 +2617,6 @@
                     }
                     return false;
                 }
-            },
-            formatNodeFeeText: function (feeData) {
-                if (!feeData) return "free";
-                if (feeData.fee_amount !== undefined && feeData.fee_amount !== null && Number(feeData.fee_amount) > 0) {
-                    return "".concat(this.formatCoins(feeData.fee_amount, 12, false), " ").concat(String(window.symbol || "KRB"));
-                }
-                if (feeData.fee_address) return "0.25%";
-                return "free";
             },
             loadNodesData: async function (token, background) {
                 var _this2 = this;
@@ -2483,8 +2640,7 @@
                             incomingConnectionsCount: null,
                             outgoingConnectionsCount: null,
                             version: "",
-                            startTime: null,
-                            feeText: "free"
+                            startTime: null
                         };
                         try {
                             var info = await fetchNodeInfo(url);
@@ -2500,12 +2656,6 @@
                             item.outgoingConnectionsCount = coerceInteger(info.outgoing_connections_count);
                             item.version = info.version || "";
                             item.startTime = coerceInteger(info.start_time);
-                            try {
-                                var feeData = await fetchNodeFee(url);
-                                item.feeText = _this2.formatNodeFeeText(feeData);
-                            } catch (feeError) {
-                                item.feeText = "free";
-                            }
                         } catch (error) {
                             item.online = false;
                         }
@@ -2762,13 +2912,17 @@
                     this.showToast("Enter a block height, hash, payment ID, address, or account number.", "error");
                     return;
                 }
-                if (query.length === 95 && ADDRESS_PATTERN.test(query)) {
-                    await this.goTo({ name: "address", params: { address: query } });
+                if (isPqAddressCandidate(query)) {
+                    if (!decodePqAddress(query)) {
+                        this.showToast("That looks like a Discrete address, but the bech32m checksum is invalid.", "error");
+                        return;
+                    }
+                    await this.goTo({ name: "address", params: { address: query.toLowerCase() } });
                     return;
                 }
-                if (ACCOUNT_NUMBER_PATTERN.test(normalizeAccountNumber(query))) {
+                if (isAccountNumberCandidate(query)) {
                     if (!isValidAccountNumber(query)) {
-                        this.showToast("Invalid account number.", "error");
+                        this.showToast("Invalid account number — check character mismatch.", "error");
                         return;
                     }
                     await this.goTo({ name: "account-number", params: { accountNumber: normalizeAccountNumber(query) } });
@@ -2831,112 +2985,41 @@
                     this.broadcastTool.loading = false;
                 }
             },
-            checkReserveProofTool: async function () {
-                this.reserveTool.error = "";
-                this.reserveTool.result = null;
-                if (!this.reserveTool.address.trim() || !this.reserveTool.signature.trim()) {
-                    this.reserveTool.error = "Address and signature are required.";
-                    return;
-                }
-                this.reserveTool.loading = true;
-                try {
-                    var height = this.reserveTool.height.trim()
-                        ? parseInt(this.reserveTool.height.trim(), 10)
-                        : (this.stats ? coerceInteger(this.stats.last_known_block_index) : this.getTipHeight());
-                    var result = await rpcCall(this.api, "checkreserveproof", {
-                        message: this.reserveTool.message.trim(),
-                        address: this.reserveTool.address.trim(),
-                        signature: this.reserveTool.signature.trim(),
-                        height: height
-                    });
-                    this.reserveTool.result = {
-                        good: coerceBoolean(result.good),
-                        total: result.total,
-                        spent: result.spent,
-                        height: height
-                    };
-                } catch (error) {
-                    this.reserveTool.error = readableError(error, "Could not verify the reserve proof.");
-                } finally {
-                    this.reserveTool.loading = false;
-                }
-            },
-            checkPaymentToolSubmit: async function () {
-                this.paymentCheckTool.error = "";
-                this.paymentCheckTool.result = null;
-                if (!this.paymentCheckTool.txHash.trim() || !this.paymentCheckTool.secret.trim() || !this.paymentCheckTool.address.trim()) {
-                    this.paymentCheckTool.error = "Transaction hash, secret/proof, and address are required.";
-                    return;
-                }
-                this.paymentCheckTool.loading = true;
-                try {
-                    var txHash = this.paymentCheckTool.txHash.trim();
-                    var resultMethod = "";
-                    var params = {};
-                    var secret = this.paymentCheckTool.secret.trim();
-                    if (this.paymentCheckTool.keyType === "tx_key") {
-                        resultMethod = "checktransactionkey";
-                        params = {
-                            transaction_id: txHash,
-                            transaction_key: secret,
-                            address: this.paymentCheckTool.address.trim()
-                        };
-                    } else if (this.paymentCheckTool.keyType === "view_key") {
-                        if (secret.length === 256) secret = secret.slice(-64);
-                        resultMethod = "checktransactionbyviewkey";
-                        params = {
-                            transaction_id: txHash,
-                            view_key: secret,
-                            address: this.paymentCheckTool.address.trim()
-                        };
-                    } else {
-                        resultMethod = "checktransactionproof";
-                        params = {
-                            transaction_id: txHash,
-                            signature: secret,
-                            destination_address: this.paymentCheckTool.address.trim()
-                        };
-                    }
-                    var responses = await Promise.all([
-                        rpcCall(this.api, resultMethod, params),
-                        rpcCall(this.api, "gettransaction", { hash: txHash }).catch(function () { return null; })
-                    ]);
-                    var verifyResult = responses[0];
-                    var txResult = responses[1];
-                    this.paymentCheckTool.txInfo = txResult && txResult.transaction ? txResult.transaction : null;
-                    this.paymentCheckTool.result = this.paymentCheckTool.keyType === "tx_proof"
-                        ? {
-                            signatureValid: verifyResult.signature_valid !== false,
-                            amount: verifyResult.received_amount || 0,
-                            outputs: verifyResult.outputs || []
-                        }
-                        : {
-                            signatureValid: true,
-                            amount: verifyResult.amount || 0,
-                            outputs: verifyResult.outputs || []
-                        };
-                } catch (error) {
-                    this.paymentCheckTool.error = readableError(error, "Could not verify this payment.");
-                } finally {
-                    this.paymentCheckTool.loading = false;
-                }
-            },
             validateAddressToolSubmit: async function () {
                 this.validateTool.error = "";
                 this.validateTool.result = null;
-                if (!this.validateTool.address.trim()) {
-                    this.validateTool.error = "Enter an address to validate.";
+                var input = this.validateTool.address.trim();
+                if (!input) {
+                    this.validateTool.error = "Enter an address or account number to validate.";
                     return;
                 }
                 this.validateTool.loading = true;
                 try {
-                    var result = await rpcCall(this.api, "validateaddress", {
-                        address: this.validateTool.address.trim()
-                    });
+                    // Both forms are self-validating; decode locally and use the
+                    // node's validateaddress as a network-side confirmation.
+                    var decoded = decodePqAddress(input);
+                    if (decoded) {
+                        this.validateTool.result = {
+                            isValid: true,
+                            form: decoded.network + " address (bech32m, " + decoded.hrp + ")",
+                            openRoute: { name: "address", params: { address: input.toLowerCase() } }
+                        };
+                        return;
+                    }
+                    if (isAccountNumberCandidate(input)) {
+                        var accountValid = isValidAccountNumber(input);
+                        this.validateTool.result = {
+                            isValid: accountValid,
+                            form: "account number",
+                            openRoute: accountValid ? { name: "account-number", params: { accountNumber: normalizeAccountNumber(input) } } : null
+                        };
+                        return;
+                    }
+                    var result = await rpcCall(this.api, "validateaddress", { address: input });
                     this.validateTool.result = {
                         isValid: coerceBoolean(result.is_valid),
-                        viewPublicKey: result.view_public_key || "",
-                        spendPublicKey: result.spend_public_key || ""
+                        form: "address",
+                        openRoute: null
                     };
                 } catch (error) {
                     this.validateTool.error = readableError(error, "Could not validate that address.");
@@ -3002,28 +3085,6 @@
                 }
                 this.paymentIdTool.paymentId = asciiToHex(memo.padStart(32, "0"));
             },
-            generatePaperWallet: async function () {
-                this.paperWallet.loading = true;
-                this.paperWallet.error = "";
-                try {
-                    if (!window.cnUtil || !window.mn_encode || !window.poor_mans_kdf) {
-                        await loadScriptOnce("/js/crypto_utils.js");
-                    }
-                    var seed = window.cnUtil.sc_reduce32(window.poor_mans_kdf(window.cnUtil.rand_32()));
-                    var keys = window.cnUtil.create_address(seed);
-                    this.paperWallet.wallet = {
-                        address: keys.public_addr,
-                        mnemonic: window.mn_encode(seed, "english"),
-                        privateKeys: keys.privateKeys,
-                        view: keys.view,
-                        spend: keys.spend
-                    };
-                } catch (error) {
-                    this.paperWallet.error = readableError(error, "Could not generate a paper wallet.");
-                } finally {
-                    this.paperWallet.loading = false;
-                }
-            },
             applySelectedNode: async function () {
                 if (!this.settings.selectedNode) {
                     this.showToast("Choose a node first.", "error");
@@ -3066,80 +3127,8 @@
                     this.pageBusy = false;
                 }
             },
-            verifyTransaction: async function () {
-                if (!this.txView.tx) return;
-                if (!this.txVerifier.secret || !this.txVerifier.address) {
-                    this.txVerifier.error = "Enter the secret/proof and recipient address.";
-                    this.txVerifier.result = null;
-                    return;
-                }
-                this.txVerifier.loading = true;
-                this.txVerifier.error = "";
-                this.txVerifier.result = null;
-                try {
-                    var method = "";
-                    var params = {};
-                    var secret = this.txVerifier.secret.trim();
-                    if (this.txVerifier.keyType === "tx_key") {
-                        method = "checktransactionkey";
-                        params = {
-                            transaction_id: this.txView.tx.hash,
-                            transaction_key: secret,
-                            address: this.txVerifier.address.trim()
-                        };
-                    } else if (this.txVerifier.keyType === "view_key") {
-                        if (secret.length === 256) secret = secret.slice(-64);
-                        method = "checktransactionbyviewkey";
-                        params = {
-                            transaction_id: this.txView.tx.hash,
-                            view_key: secret,
-                            address: this.txVerifier.address.trim()
-                        };
-                    } else {
-                        method = "checktransactionproof";
-                        params = {
-                            transaction_id: this.txView.tx.hash,
-                            signature: secret,
-                            destination_address: this.txVerifier.address.trim()
-                        };
-                    }
-                    var result = await rpcCall(this.api, method, params);
-                    if (this.txVerifier.keyType === "tx_proof") {
-                        this.txVerifier.result = {
-                            signatureValid: result.signature_valid !== false,
-                            amount: result.received_amount || 0,
-                            outputs: result.outputs || []
-                        };
-                    } else {
-                        this.txVerifier.result = {
-                            signatureValid: true,
-                            amount: result.amount || 0,
-                            outputs: result.outputs || []
-                        };
-                    }
-                    this.activeTxTab = "outputs";
-                } catch (error) {
-                    this.txVerifier.error = readableError(error, "Transaction verification failed.");
-                } finally {
-                    this.txVerifier.loading = false;
-                }
-            },
-            resetVerification: function () {
-                this.txVerifier.keyType = "tx_key";
-                this.txVerifier.secret = "";
-                this.txVerifier.address = "";
-                this.txVerifier.loading = false;
-                this.txVerifier.error = "";
-                this.txVerifier.result = null;
-            },
             isOutputHighlighted: function (output, index) {
-                if (this.route.query.highlight !== undefined && String(this.route.query.highlight) === String(index)) return true;
-                if (!this.txVerifier.result || !Array.isArray(this.txVerifier.result.outputs)) return false;
-                return this.txVerifier.result.outputs.some(function (candidate) {
-                    return candidate && candidate.target && candidate.target.data && output && output.output && output.output.target && output.output.target.data
-                        ? candidate.target.data.key === output.output.target.data.key
-                        : false;
-                });
+                return this.route.query.highlight !== undefined && String(this.route.query.highlight) === String(index);
             }
         },
         mounted: async function () {
