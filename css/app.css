@@ -944,6 +944,15 @@ html[data-theme="dark"] .page-title--hash {
     gap: 0.7rem;
 }
 
+.detail-list--grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.detail-row--wide {
+    grid-column: 1 / -1;
+}
+
 .detail-list--after-notice {
     margin-top: 0.85rem;
 }
@@ -1679,6 +1688,10 @@ html[data-theme="dark"] select optgroup {
 
     .node-status-strip .metric-node-status {
         align-items: flex-start;
+    }
+
+    .detail-list--grid {
+        grid-template-columns: 1fr;
     }
 
     .detail-row {

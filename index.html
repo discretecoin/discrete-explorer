@@ -698,117 +698,112 @@
                                 </p>
                             </div>
 
-                            <div class="metric-grid metric-grid--compact">
-                                <article class="metric-card">
-                                    <span class="metric-label">Block height</span>
-                                    <strong>{{ txView.tx.inBlockchain ? formatNumber(txView.tx.blockIndex) : 'Mempool' }}</strong>
-                                    <span class="metric-meta">{{ txView.tx.inBlockchain ? formatDateTime(txView.tx.timestamp) : 'No first confirmation yet' }}</span>
-                                </article>
-                                <article class="metric-card">
-                                    <span class="metric-label">Outputs sum</span>
-                                    <strong>{{ formatCoins(txView.tx.totalOutputsAmount, 12) }}</strong>
-                                    <span class="metric-meta">Visible outputs total</span>
-                                </article>
-                                <article class="metric-card">
-                                    <span class="metric-label">Fee</span>
-                                    <strong>{{ txFeeText }}</strong>
-                                    <span class="metric-meta">Miner compensation</span>
-                                </article>
-                                <article class="metric-card">
-                                    <span class="metric-label">Size</span>
-                                    <strong>{{ formatBytes(txView.tx.size) }}</strong>
-                                    <span class="metric-meta">Serialized transaction size</span>
-                                </article>
-                                <article class="metric-card">
-                                    <span class="metric-label">Type</span>
-                                    <strong>{{ txTypeName(txView.tx.txType) }}</strong>
-                                    <span class="metric-meta">Version {{ txView.tx.version || '--' }}</span>
-                                </article>
-                                <article class="metric-card">
-                                    <span class="metric-label">Unlock height</span>
-                                    <strong>{{ formatNumber(txView.tx.unlockHeight || 0) }}</strong>
-                                    <span class="metric-meta">{{ coerceNumber(txView.tx.unlockHeight) ? 'Spendable after this height' : 'No spend lock' }}</span>
-                                </article>
-                            </div>
+                            <article class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <p class="eyebrow">Overview</p>
+                                    </div>
+                                </div>
+                                <div class="detail-list detail-list--grid">
+                                    <div class="detail-row detail-row--wide" v-if="txView.tx.inBlockchain">
+                                        <span>Block hash</span>
+                                        <a class="hash-string inline-link" :href="linkTo({ name: 'block', params: { hash: txView.tx.blockHash } })" @click.prevent="goTo({ name: 'block', params: { hash: txView.tx.blockHash } })">{{ txView.tx.blockHash }}</a>
+                                    </div>
+                                    <div class="detail-row"><span>Type</span><strong>{{ txTypeName(txView.tx.txType) }}</strong></div>
+                                    <div class="detail-row"><span>Block height</span><strong>{{ txView.tx.inBlockchain ? formatNumber(txView.tx.blockIndex) : 'Mempool' }}</strong></div>
+                                    <div class="detail-row"><span>Timestamp</span><strong>{{ txView.tx.inBlockchain ? formatDateTime(txView.tx.timestamp) : 'Awaiting first confirmation' }}</strong></div>
+                                    <div class="detail-row"><span>Outputs sum</span><strong>{{ formatCoins(txView.tx.totalOutputsAmount, 12) }}</strong></div>
+                                    <div class="detail-row">
+                                        <span>Fee</span>
+                                        <strong>{{ txView.tx.txType === 3 ? 'None — priced by anti-spam proof-of-work' : txFeeText }}</strong>
+                                    </div>
+                                    <div class="detail-row"><span>Size</span><strong>{{ formatBytes(txView.tx.size) }}</strong></div>
+                                    <div class="detail-row"><span>Version</span><strong>{{ txView.tx.version || '--' }}</strong></div>
+                                    <div class="detail-row"><span>Unlock height</span><strong>{{ coerceNumber(txView.tx.unlockHeight) ? formatNumber(txView.tx.unlockHeight) : 'No spend lock' }}</strong></div>
+                                </div>
+                            </article>
 
-                            <div class="panel-grid">
-                                <article class="panel">
-                                    <div class="panel-header">
-                                        <div>
-                                            <p class="eyebrow">Overview</p>
-                                            <h2>Transaction metadata</h2>
-                                        </div>
+                            <article v-if="transactionRawExtra || transactionPaymentId || transactionExtraNonce || transactionMinerSpendPub" class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <p class="eyebrow">Transaction payload</p>
+                                        <h2>Extra data</h2>
                                     </div>
-                                    <div class="detail-list">
-                                        <div class="detail-row" v-if="txView.tx.inBlockchain">
-                                            <span>Block hash</span>
-                                            <a class="hash-string inline-link" :href="linkTo({ name: 'block', params: { hash: txView.tx.blockHash } })" @click.prevent="goTo({ name: 'block', params: { hash: txView.tx.blockHash } })">{{ txView.tx.blockHash }}</a>
-                                        </div>
-                                        <div class="detail-row"><span>Type</span><strong>{{ txTypeName(txView.tx.txType) }}</strong></div>
-                                        <div class="detail-row" v-if="txView.tx.txType === 3"><span>Fee</span><strong>None &mdash; priced by anti-spam proof-of-work</strong></div>
-                                        <div class="detail-row" v-if="transactionRawExtra">
-                                            <span>Raw extra</span>
-                                            <details class="detail-fold">
-                                                <summary>{{ formatNumber(transactionRawExtra.length / 2) }} bytes</summary>
-                                                <p class="hash-string detail-fold-body">{{ transactionRawExtra }}</p>
-                                            </details>
-                                        </div>
-                                        <div class="detail-row" v-if="transactionPaymentId">
-                                            <span>Payment ID</span>
-                                            <a class="hash-string inline-link" :href="linkTo({ name: 'payment-id', params: { hash: transactionPaymentId } })" @click.prevent="goTo({ name: 'payment-id', params: { hash: transactionPaymentId } })">{{ transactionPaymentId }}</a>
-                                        </div>
-                                        <div class="detail-row" v-if="transactionDecodedPaymentId">
-                                            <span>Decoded payment ID</span>
-                                            <strong>{{ transactionDecodedPaymentId }}</strong>
-                                        </div>
-                                        <div class="detail-row" v-if="transactionExtraNonce">
-                                            <span>Extra nonce</span>
-                                            <strong class="hash-string">{{ transactionExtraNonce }}</strong>
-                                        </div>
-                                        <div class="detail-row" v-if="transactionDecodedExtraNonce">
-                                            <span>Decoded nonce</span>
-                                            <strong>{{ transactionDecodedExtraNonce }}</strong>
-                                        </div>
-                                        <div class="detail-row" v-if="transactionMinerSpendPub">
-                                            <span>Miner spend key</span>
-                                            <details class="detail-fold">
-                                                <summary>ML-DSA-65 ({{ formatNumber(transactionMinerSpendPub.length / 2) }} bytes)</summary>
-                                                <p class="hash-string detail-fold-body">{{ transactionMinerSpendPub }}</p>
-                                            </details>
-                                        </div>
-                                        <div class="detail-row" v-if="txView.tx.accountRegistration">
-                                            <span>Account registration</span>
-                                            <strong>{{ txView.tx.inBlockchain ? 'Detected on-chain' : 'Pending confirmation' }}</strong>
-                                        </div>
-                                        <div class="detail-row" v-if="txView.tx.accountRegistration && txView.tx.accountRegistration.accountNumber">
-                                            <span>Account number</span>
-                                            <a class="inline-link" :href="linkTo({ name: 'account-number', params: { accountNumber: txView.tx.accountRegistration.accountNumber } })" @click.prevent="goTo({ name: 'account-number', params: { accountNumber: txView.tx.accountRegistration.accountNumber } })">{{ txView.tx.accountRegistration.accountNumber }}</a>
-                                        </div>
-                                        <div class="detail-row" v-else-if="txView.tx.accountRegistration">
-                                            <span>Account number</span>
-                                            <strong>{{ txView.tx.inBlockchain ? 'Could not determine yet' : 'Assigned after inclusion in a block' }}</strong>
-                                        </div>
-                                        <div class="detail-row" v-if="txView.tx.accountRegistration && txView.tx.accountRegistration.resolved !== null">
-                                            <span>Registry check</span>
-                                            <strong>{{ txView.tx.accountRegistration.resolved ? (txView.tx.accountRegistration.keysMatch === false ? 'On-chain keys differ from this transaction' : 'Keys match the on-chain registry') : 'Not found in the on-chain registry yet' }}</strong>
-                                        </div>
-                                        <div class="detail-row" v-if="txView.tx.accountRegistration && txView.tx.accountRegistration.viewPublicKey">
-                                            <span>Registered view key</span>
-                                            <details class="detail-fold">
-                                                <summary>ML-KEM-768 ({{ formatNumber(txView.tx.accountRegistration.viewPublicKey.length / 2) }} bytes)</summary>
-                                                <p class="hash-string detail-fold-body">{{ txView.tx.accountRegistration.viewPublicKey }}</p>
-                                            </details>
-                                        </div>
-                                        <div class="detail-row" v-if="txView.tx.accountRegistration && txView.tx.accountRegistration.spendPublicKey">
-                                            <span>Registered spend key</span>
-                                            <details class="detail-fold">
-                                                <summary>ML-DSA-65 ({{ formatNumber(txView.tx.accountRegistration.spendPublicKey.length / 2) }} bytes)</summary>
-                                                <p class="hash-string detail-fold-body">{{ txView.tx.accountRegistration.spendPublicKey }}</p>
-                                            </details>
-                                        </div>
+                                </div>
+                                <div class="detail-list detail-list--grid">
+                                    <div class="detail-row detail-row--wide" v-if="transactionRawExtra">
+                                        <span>Raw extra</span>
+                                        <details class="detail-fold">
+                                            <summary>{{ formatNumber(transactionRawExtra.length / 2) }} bytes</summary>
+                                            <p class="hash-string detail-fold-body">{{ transactionRawExtra }}</p>
+                                        </details>
                                     </div>
-                                </article>
-                            </div>
+                                    <div class="detail-row detail-row--wide" v-if="transactionPaymentId">
+                                        <span>Payment ID</span>
+                                        <a class="hash-string inline-link" :href="linkTo({ name: 'payment-id', params: { hash: transactionPaymentId } })" @click.prevent="goTo({ name: 'payment-id', params: { hash: transactionPaymentId } })">{{ transactionPaymentId }}</a>
+                                    </div>
+                                    <div class="detail-row" v-if="transactionDecodedPaymentId">
+                                        <span>Decoded payment ID</span>
+                                        <strong>{{ transactionDecodedPaymentId }}</strong>
+                                    </div>
+                                    <div class="detail-row detail-row--wide" v-if="transactionExtraNonce">
+                                        <span>Extra nonce</span>
+                                        <strong class="hash-string">{{ transactionExtraNonce }}</strong>
+                                    </div>
+                                    <div class="detail-row" v-if="transactionDecodedExtraNonce">
+                                        <span>Decoded nonce</span>
+                                        <strong>{{ transactionDecodedExtraNonce }}</strong>
+                                    </div>
+                                    <div class="detail-row detail-row--wide" v-if="transactionMinerSpendPub">
+                                        <span>Miner spend key</span>
+                                        <details class="detail-fold">
+                                            <summary>ML-DSA-65 ({{ formatNumber(transactionMinerSpendPub.length / 2) }} bytes)</summary>
+                                            <p class="hash-string detail-fold-body">{{ transactionMinerSpendPub }}</p>
+                                        </details>
+                                    </div>
+                                </div>
+                            </article>
+
+                            <article v-if="txView.tx.accountRegistration" class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <p class="eyebrow">Account registration</p>
+                                        <h2>Registry details</h2>
+                                    </div>
+                                </div>
+                                <div class="detail-list detail-list--grid">
+                                    <div class="detail-row">
+                                        <span>Status</span>
+                                        <strong>{{ txView.tx.inBlockchain ? 'Detected on-chain' : 'Pending confirmation' }}</strong>
+                                    </div>
+                                    <div class="detail-row" v-if="txView.tx.accountRegistration.accountNumber">
+                                        <span>Account number</span>
+                                        <a class="inline-link" :href="linkTo({ name: 'account-number', params: { accountNumber: txView.tx.accountRegistration.accountNumber } })" @click.prevent="goTo({ name: 'account-number', params: { accountNumber: txView.tx.accountRegistration.accountNumber } })">{{ txView.tx.accountRegistration.accountNumber }}</a>
+                                    </div>
+                                    <div class="detail-row" v-else>
+                                        <span>Account number</span>
+                                        <strong>{{ txView.tx.inBlockchain ? 'Could not determine yet' : 'Assigned after inclusion in a block' }}</strong>
+                                    </div>
+                                    <div class="detail-row" v-if="txView.tx.accountRegistration.resolved !== null">
+                                        <span>Registry check</span>
+                                        <strong>{{ txView.tx.accountRegistration.resolved ? (txView.tx.accountRegistration.keysMatch === false ? 'On-chain keys differ from this transaction' : 'Keys match the on-chain registry') : 'Not found in the on-chain registry yet' }}</strong>
+                                    </div>
+                                    <div class="detail-row detail-row--wide" v-if="txView.tx.accountRegistration.viewPublicKey">
+                                        <span>Registered view key</span>
+                                        <details class="detail-fold">
+                                            <summary>ML-KEM-768 ({{ formatNumber(txView.tx.accountRegistration.viewPublicKey.length / 2) }} bytes)</summary>
+                                            <p class="hash-string detail-fold-body">{{ txView.tx.accountRegistration.viewPublicKey }}</p>
+                                        </details>
+                                    </div>
+                                    <div class="detail-row detail-row--wide" v-if="txView.tx.accountRegistration.spendPublicKey">
+                                        <span>Registered spend key</span>
+                                        <details class="detail-fold">
+                                            <summary>ML-DSA-65 ({{ formatNumber(txView.tx.accountRegistration.spendPublicKey.length / 2) }} bytes)</summary>
+                                            <p class="hash-string detail-fold-body">{{ txView.tx.accountRegistration.spendPublicKey }}</p>
+                                        </details>
+                                    </div>
+                                </div>
+                            </article>
 
                             <div class="tab-strip">
                                 <button type="button" class="tab-button" :class="{ active: activeTxTab === 'inputs' }" @click="activeTxTab = 'inputs'">Inputs</button>
@@ -817,7 +812,11 @@
                             </div>
 
                             <article v-if="activeTxTab === 'inputs'" class="panel">
-                                <div class="table-shell">
+                                <div v-if="!txView.tx.inputs.length" class="state-card">
+                                    <i class="fas fa-inbox"></i>
+                                    <p>This transaction type carries no inputs.</p>
+                                </div>
+                                <div v-else class="table-shell">
                                     <table class="data-table">
                                         <thead>
                                             <tr>
@@ -838,7 +837,7 @@
                                                     <td>{{ formatCoins(input.data.amount, false) }}</td>
                                                     <td><span class="hash-string">{{ input.data.nullifier }}</span></td>
                                                     <td>
-                                                        <a class="inline-link" :href="linkTo({ name: 'transaction', params: { hash: input.data.output.transactionHash }, query: { highlight: input.data.output.number } })" @click.prevent="goTo({ name: 'transaction', params: { hash: input.data.output.transactionHash }, query: { highlight: input.data.output.number } })">output {{ formatNumber(input.data.output.number) }} of {{ shortHash(input.data.output.transactionHash) }}</a>
+                                                        <a class="inline-link" :href="linkTo({ name: 'transaction', params: { hash: input.data.output.transactionHash }, query: { highlight: input.data.output.number } })" @click.prevent="goTo({ name: 'transaction', params: { hash: input.data.output.transactionHash }, query: { highlight: input.data.output.number } })">output {{ formatNumber(input.data.output.number) }} in {{ shortHash(input.data.output.transactionHash) }}</a>
                                                         <details class="detail-fold" v-if="input.data.input && input.data.input.auth_pub">
                                                             <summary>Authorization key, ML-DSA-65 ({{ formatNumber(input.data.input.auth_pub.length / 2) }} bytes)</summary>
                                                             <p class="hash-string detail-fold-body">{{ input.data.input.auth_pub }}</p>
@@ -855,7 +854,11 @@
                             </article>
 
                             <article v-if="activeTxTab === 'outputs'" class="panel">
-                                <div class="table-shell">
+                                <div v-if="!txView.tx.outputs.length" class="state-card">
+                                    <i class="fas fa-inbox"></i>
+                                    <p>This transaction type carries no outputs.</p>
+                                </div>
+                                <div v-else class="table-shell">
                                     <table class="data-table">
                                         <thead>
                                             <tr>
