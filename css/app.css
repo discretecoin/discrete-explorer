@@ -1915,13 +1915,23 @@ html[data-theme="dark"] select optgroup {
     margin-top: 0.35rem;
 }
 
-/* Discrete bech32m addresses run ~5000 characters — keep the page title
-   readable and bounded instead of filling the viewport. */
-.page-title--address {
-    font-size: 0.95rem;
+/* Discrete bech32m addresses run ~5000 characters. Keep the title to one
+   elided row until the reader explicitly expands it. */
+.page-title.page-title--address {
+    font-size: 1.05rem;
     letter-spacing: 0;
     line-height: 1.4;
-    max-height: 10.5em;
-    overflow-y: auto;
+    margin-bottom: 1.1rem;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    word-break: normal;
+}
+
+.page-title.page-title--address.is-expanded {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
     word-break: break-all;
 }

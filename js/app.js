@@ -939,6 +939,7 @@
                 routeRequestId: 0,
                 clockTimerId: 0,
                 pollTimerId: 0,
+                addressExpanded: false,
                 popstateHandler: null,
                 mobileHeaderScrollHandler: null,
                 mobileHeaderResizeHandler: null,
@@ -2517,6 +2518,7 @@
                 }
             },
             loadAddressData: async function (token, background) {
+                if (!background) this.addressExpanded = false;
                 if (!background || !this.addressView.result) this.addressView.loading = true;
                 this.addressView.error = "";
                 this.addressView.accountNumberError = "";

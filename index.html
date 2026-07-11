@@ -963,13 +963,17 @@
                             <div class="page-head-top">
                                 <p class="eyebrow">Address</p>
                                 <div class="page-actions">
+                                    <button type="button" class="button button--ghost button--small" :aria-expanded="addressExpanded" aria-controls="address-title" @click="addressExpanded = !addressExpanded">
+                                        <i class="fas" :class="addressExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                                        {{ addressExpanded ? 'Collapse' : 'Expand' }}
+                                    </button>
                                     <button type="button" class="button button--ghost button--small" @click="copyText(route.params.address, 'Address copied')">
                                         <i class="fas fa-copy"></i>
                                         Copy
                                     </button>
                                 </div>
                             </div>
-                            <h1 class="page-title page-title--hash hash-string page-title--address">{{ route.params.address }}</h1>
+                            <h1 id="address-title" class="page-title page-title--hash hash-string page-title--address" :class="{ 'is-expanded': addressExpanded }">{{ route.params.address }}</h1>
                             <p class="page-subtitle">Bech32m decoding, post-quantum key inspection, and registered account-number lookup.</p>
                         </div>
 
