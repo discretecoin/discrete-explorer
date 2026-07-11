@@ -1,4 +1,4 @@
-var apiList = ["https://seed1.discrete.cash:9332", "https://seed2.discrete.cash:9332", "http://127.0.0.1:9331"];
+var apiList = ["https://seed1.discrete.cash:9332", "https://seed2.discrete.cash:9332"];
 var api = "https://seed1.discrete.cash:9332";
 
 var blockTargetInterval = 90;
