@@ -1132,6 +1132,27 @@ html[data-theme="dark"] select optgroup {
     color: var(--text);
 }
 
+.tab-count {
+    align-items: center;
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--text-muted);
+    display: inline-flex;
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+    justify-content: center;
+    line-height: 1;
+    margin-left: 0.35rem;
+    min-width: 1.4rem;
+    padding: 0.24rem 0.4rem;
+}
+
+.tab-button:hover .tab-count,
+.tab-button.active .tab-count {
+    color: var(--text);
+}
+
 .row-highlight td {
     background: rgba(57, 217, 138, 0.12);
 }

@@ -806,8 +806,12 @@
                             </article>
 
                             <div class="tab-strip">
-                                <button type="button" class="tab-button" :class="{ active: activeTxTab === 'inputs' }" @click="activeTxTab = 'inputs'">Inputs</button>
-                                <button type="button" class="tab-button" :class="{ active: activeTxTab === 'outputs' }" @click="activeTxTab = 'outputs'">Outputs</button>
+                                <button type="button" class="tab-button" :class="{ active: activeTxTab === 'inputs' }" @click="activeTxTab = 'inputs'">
+                                    Inputs <span class="tab-count">{{ formatNumber(txView.tx.inputs.length) }}</span>
+                                </button>
+                                <button type="button" class="tab-button" :class="{ active: activeTxTab === 'outputs' }" @click="activeTxTab = 'outputs'">
+                                    Outputs <span class="tab-count">{{ formatNumber(txView.tx.outputs.length) }}</span>
+                                </button>
                                 <button type="button" class="tab-button" :class="{ active: activeTxTab === 'signatures' }" @click="activeTxTab = 'signatures'">Signatures</button>
                             </div>
 
