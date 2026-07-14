@@ -805,6 +805,38 @@
                                 </div>
                             </article>
 
+                            <article v-if="txView.tx.txType === 1" class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <p class="eyebrow">Payment verification</p>
+                                        <h2>Check payment proof</h2>
+                                    </div>
+                                </div>
+                                <form class="verification-form" @submit.prevent="checkTransactionProofSubmit">
+                                    <label class="field">
+                                        <span>Recipient address or account number</span>
+                                        <textarea v-model.trim="txProofVerifier.address" rows="4" placeholder="disc1... address or account number"></textarea>
+                                    </label>
+                                    <label class="field">
+                                        <span>Payment proof</span>
+                                        <textarea v-model.trim="txProofVerifier.proof" rows="4" placeholder="disctxp1... or tdisctxp1... proof copied from the wallet"></textarea>
+                                    </label>
+                                    <p class="fine-print">The selected node verifies that the proof opens outputs committed to this recipient's spend authority. It does not prove view-key delivery or a deposit subaddress index.</p>
+                                    <div class="panel-actions">
+                                        <button type="submit" class="button button--primary" :disabled="txProofVerifier.loading">
+                                            <i class="fas fa-receipt"></i>
+                                            {{ txProofVerifier.loading ? 'Checking...' : 'Check payment' }}
+                                        </button>
+                                        <button type="button" class="button button--ghost" @click="resetTransactionProofVerifier">Clear</button>
+                                    </div>
+                                </form>
+                                <div v-if="txProofVerifier.error" class="notice notice--error">{{ txProofVerifier.error }}</div>
+                                <div v-if="txProofVerifier.result" class="notice" :class="txProofVerifier.result.proofValid ? 'notice--success' : 'notice--error'">
+                                    <strong>{{ txProofVerifier.result.proofValid ? 'Received amount: ' + formatCoins(txProofVerifier.result.amount, 12) : 'Payment proof is invalid' }}</strong>
+                                    <p v-if="txProofVerifier.result.proofValid">{{ formatNumber(txProofVerifier.result.outputIndices.length) }} matching output{{ txProofVerifier.result.outputIndices.length === 1 ? '' : 's' }} highlighted below. {{ formatNumber(txProofVerifier.result.confirmations) }} confirmation{{ txProofVerifier.result.confirmations === 1 ? '' : 's' }}.</p>
+                                </div>
+                            </article>
+
                             <div class="tab-strip">
                                 <button type="button" class="tab-button" :class="{ active: activeTxTab === 'inputs' }" @click="activeTxTab = 'inputs'">
                                     Inputs <span class="tab-count">{{ formatNumber(txView.tx.inputs.length) }}</span>
@@ -1330,6 +1362,48 @@
                             </form>
                             <div v-if="broadcastTool.error" class="notice notice--error">{{ broadcastTool.error }}</div>
                             <div v-if="broadcastTool.success" class="notice notice--success">{{ broadcastTool.success }}</div>
+                        </article>
+                    </section>
+
+                    <section v-else-if="route.name === 'check-payment'" class="page-section">
+                        <div class="page-head">
+                            <div>
+                                <p class="eyebrow">Tools</p>
+                                <h1 class="page-title">Check payment proof</h1>
+                                <p class="page-subtitle">Verify a wallet-generated payment proof for a transaction and recipient.</p>
+                            </div>
+                        </div>
+
+                        <article class="panel">
+                            <form class="verification-form" @submit.prevent="checkPaymentProofToolSubmit">
+                                <label class="field">
+                                    <span>Transaction hash</span>
+                                    <input v-model.trim="paymentProofTool.txHash" type="text" maxlength="64" placeholder="64-character transaction hash">
+                                </label>
+                                <label class="field">
+                                    <span>Recipient address or account number</span>
+                                    <textarea v-model.trim="paymentProofTool.address" rows="4" placeholder="disc1... address or account number"></textarea>
+                                </label>
+                                <label class="field">
+                                    <span>Payment proof</span>
+                                    <textarea v-model.trim="paymentProofTool.proof" rows="4" placeholder="disctxp1... or tdisctxp1... proof copied from the wallet"></textarea>
+                                </label>
+                                <p class="fine-print">The proof is checked by the selected node against public transaction data. It proves the amount committed to the recipient's spend authority, not view-key delivery or a deposit subaddress index.</p>
+                                <div class="panel-actions">
+                                    <button type="submit" class="button button--primary" :disabled="paymentProofTool.loading">
+                                        <i class="fas fa-receipt"></i>
+                                        {{ paymentProofTool.loading ? 'Checking...' : 'Check payment' }}
+                                    </button>
+                                    <button v-if="paymentProofTool.result" type="button" class="button button--ghost" @click="goTo({ name: 'transaction', params: { hash: paymentProofTool.txHash } })">
+                                        Open transaction
+                                    </button>
+                                </div>
+                            </form>
+                            <div v-if="paymentProofTool.error" class="notice notice--error">{{ paymentProofTool.error }}</div>
+                            <div v-if="paymentProofTool.result" class="notice" :class="paymentProofTool.result.proofValid ? 'notice--success' : 'notice--error'">
+                                <strong>{{ paymentProofTool.result.proofValid ? 'Received amount: ' + formatCoins(paymentProofTool.result.amount, 12) : 'Payment proof is invalid' }}</strong>
+                                <p v-if="paymentProofTool.result.proofValid">{{ formatNumber(paymentProofTool.result.outputIndices.length) }} matching output{{ paymentProofTool.result.outputIndices.length === 1 ? '' : 's' }}. {{ formatNumber(paymentProofTool.result.confirmations) }} confirmation{{ paymentProofTool.result.confirmations === 1 ? '' : 's' }}.</p>
+                            </div>
                         </article>
                     </section>
 

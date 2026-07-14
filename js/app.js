@@ -49,6 +49,7 @@
         "alt-blocks",
         "tools",
         "broadcast-transaction",
+        "check-payment",
         "validate-address",
         "verify-message",
         "amount-converter",
@@ -789,6 +790,7 @@
         if (hash === "alt-blocks" || hash === "alt_blocks") return normalizeRoute({ name: "alt-blocks" });
         if (hash === "tools") return normalizeRoute({ name: "tools" });
         if (hash === "pushtx") return normalizeRoute({ name: "broadcast-transaction" });
+        if (hash === "check_payment" || hash === "check-payment") return normalizeRoute({ name: "check-payment" });
         if (hash === "validate_address") return normalizeRoute({ name: "validate-address" });
         if (hash === "verify_message") return normalizeRoute({ name: "verify-message" });
         if (hash === "amount_converter") return normalizeRoute({ name: "amount-converter" });
@@ -940,6 +942,7 @@
                 ],
                 toolNav: [
                     { name: "broadcast-transaction", label: "Broadcast tx", icon: "fa-broadcast-tower", description: "Submit raw transaction hex to the network." },
+                    { name: "check-payment", label: "Check payment proof", icon: "fa-receipt", description: "Verify a wallet payment proof for a transaction." },
                     { name: "validate-address", label: "Validate address", icon: "fa-check-circle", description: "Validate an address or account number." },
                     { name: "verify-message", label: "Verify message", icon: "fa-envelope-open-text", description: "Verify a post-quantum signed message." },
                     { name: "amount-converter", label: "Amount converter", icon: "fa-exchange-alt", description: "Convert atomic units to readable XDS amounts." },
@@ -965,6 +968,13 @@
                 },
                 blockView: { loading: false, error: "", block: null, nextHash: "" },
                 txView: { loading: false, error: "", tx: null },
+                txProofVerifier: {
+                    address: "",
+                    proof: "",
+                    loading: false,
+                    error: "",
+                    result: null
+                },
                 paymentView: { loading: false, error: "", txs: [] },
                 addressView: { loading: false, error: "", result: null, accountNumber: null, accountNumberError: "" },
                 accountNumberView: { loading: false, error: "", result: null },
@@ -994,6 +1004,14 @@
                     loading: false,
                     error: "",
                     success: ""
+                },
+                paymentProofTool: {
+                    txHash: "",
+                    address: "",
+                    proof: "",
+                    loading: false,
+                    error: "",
+                    result: null
                 },
                 validateTool: {
                     address: "",
@@ -2466,6 +2484,9 @@
                         transaction = enrichedTransaction;
                     }
                     if (token !== this.routeRequestId) return false;
+                    if (!this.txView.tx || this.txView.tx.hash !== transaction.hash) {
+                        this.resetTransactionProofVerifier();
+                    }
                     this.txView.tx = transaction;
                     this.txView.loading = false;
                     this.activeTxTab = "outputs";
@@ -2969,6 +2990,81 @@
                     this.broadcastTool.loading = false;
                 }
             },
+            normalizePaymentProofResult: function (result) {
+                var amount = toBigIntValue(result && result.received_amount);
+                var outputIndices = Array.isArray(result && result.output_indices)
+                    ? result.output_indices.map(coerceInteger).filter(function (index) { return index !== null && index >= 0; })
+                    : [];
+                return {
+                    proofValid: coerceBoolean(result && result.signature_valid),
+                    amount: amount === null ? 0n : amount,
+                    outputIndices: outputIndices,
+                    confirmations: Math.max(coerceInteger(result && result.confirmations) || 0, 0)
+                };
+            },
+            checkPaymentProof: async function (transactionHash, address, proof) {
+                var result = await rpcCall(this.api, "checktransactionproof", {
+                    transaction_id: transactionHash,
+                    destination_address: address,
+                    signature: proof
+                }, { bigIntFields: ["received_amount"] });
+                return this.normalizePaymentProofResult(result);
+            },
+            validatePaymentProofFields: function (transactionHash, address, proof) {
+                if (!isHexString(transactionHash, 64)) return "Enter a valid 64-character transaction hash.";
+                if (!address) return "Enter the recipient address or account number.";
+                if (!proof) return "Paste the payment proof from the wallet.";
+                return "";
+            },
+            checkPaymentProofToolSubmit: async function () {
+                this.paymentProofTool.error = "";
+                this.paymentProofTool.result = null;
+                var transactionHash = normalizeHex(this.paymentProofTool.txHash);
+                var address = this.paymentProofTool.address.trim();
+                var proof = this.paymentProofTool.proof.trim();
+                var validationError = this.validatePaymentProofFields(transactionHash, address, proof);
+                if (validationError) {
+                    this.paymentProofTool.error = validationError;
+                    return;
+                }
+                this.paymentProofTool.loading = true;
+                try {
+                    this.paymentProofTool.result = await this.checkPaymentProof(transactionHash, address, proof);
+                    this.paymentProofTool.txHash = transactionHash;
+                } catch (error) {
+                    this.paymentProofTool.error = readableError(error, "Could not verify the payment proof.");
+                } finally {
+                    this.paymentProofTool.loading = false;
+                }
+            },
+            checkTransactionProofSubmit: async function () {
+                this.txProofVerifier.error = "";
+                this.txProofVerifier.result = null;
+                var transactionHash = this.txView.tx ? normalizeHex(this.txView.tx.hash) : "";
+                var address = this.txProofVerifier.address.trim();
+                var proof = this.txProofVerifier.proof.trim();
+                var validationError = this.validatePaymentProofFields(transactionHash, address, proof);
+                if (validationError) {
+                    this.txProofVerifier.error = validationError;
+                    return;
+                }
+                this.txProofVerifier.loading = true;
+                try {
+                    this.txProofVerifier.result = await this.checkPaymentProof(transactionHash, address, proof);
+                    if (this.txProofVerifier.result.proofValid) this.activeTxTab = "outputs";
+                } catch (error) {
+                    this.txProofVerifier.error = readableError(error, "Could not verify the payment proof.");
+                } finally {
+                    this.txProofVerifier.loading = false;
+                }
+            },
+            resetTransactionProofVerifier: function () {
+                this.txProofVerifier.address = "";
+                this.txProofVerifier.proof = "";
+                this.txProofVerifier.loading = false;
+                this.txProofVerifier.error = "";
+                this.txProofVerifier.result = null;
+            },
             validateAddressToolSubmit: async function () {
                 this.validateTool.error = "";
                 this.validateTool.result = null;
@@ -3112,7 +3208,10 @@
                 }
             },
             isOutputHighlighted: function (output, index) {
-                return this.route.query.highlight !== undefined && String(this.route.query.highlight) === String(index);
+                if (this.route.query.highlight !== undefined && String(this.route.query.highlight) === String(index)) return true;
+                return Boolean(this.txProofVerifier.result
+                    && this.txProofVerifier.result.proofValid
+                    && this.txProofVerifier.result.outputIndices.indexOf(index) !== -1);
             }
         },
         mounted: async function () {
