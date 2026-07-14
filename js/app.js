@@ -89,27 +89,9 @@
         }
     }
 
-    function isLocalDevOrigin() {
-        return typeof window !== "undefined"
-            && window.location
-            && /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname || "");
-    }
-
-    function isLoopbackApi(url) {
-        try {
-            var parsed = new URL(normalizeApiUrl(url));
-            return /^(localhost|127\.0\.0\.1)$/i.test(parsed.hostname || "");
-        } catch (error) {
-            return false;
-        }
-    }
-
     function buildApiRequestUrl(apiUrl, pathname) {
         var normalizedApi = normalizeApiUrl(apiUrl);
         var normalizedPath = String(pathname || "");
-        if (isLocalDevOrigin() && isLoopbackApi(normalizedApi)) {
-            return "/__proxy__?target=".concat(encodeURIComponent(normalizedApi + normalizedPath));
-        }
         return "".concat(normalizedApi).concat(normalizedPath);
     }
 

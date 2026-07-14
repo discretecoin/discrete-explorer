@@ -20,5 +20,5 @@ bech32m `disc1…` / `tdisc1…` addresses, and on-chain account numbers
 ```bash
 node dev-server.js
 ```
-serves the app at http://localhost:8080 and proxies loopback RPC targets, so a
-local `discreted` on http://127.0.0.1:9331 works without CORS setup.
+serves the app at http://localhost:8080. The configured `discreted` RPC must
+allow the explorer origin with `--enable-cors`.
