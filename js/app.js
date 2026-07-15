@@ -987,7 +987,14 @@
             } catch (error) {
                 throw new Error("Invalid JSON response.");
             }
-            if (!response.ok) throw new Error(payload && payload.error && payload.error.message ? payload.error.message : "Request failed.");
+            if (!response.ok) {
+                var responseMessage = payload && payload.error && payload.error.message
+                    ? payload.error.message
+                    : payload && payload.message
+                        ? payload.message
+                        : "Request failed.";
+                throw new Error(responseMessage);
+            }
             return payload;
         } catch (error) {
             if (error && (error.name === "AbortError" || error.message === "Request timed out.") && timeoutMs > 0) {
