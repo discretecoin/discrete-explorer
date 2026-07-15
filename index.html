@@ -53,7 +53,7 @@
 
                         <form class="searchbar searchbar--compact" @submit.prevent="submitSearch">
                             <i class="fas fa-search searchbar-icon" aria-hidden="true"></i>
-                            <input v-model.trim="searchQuery" type="search" spellcheck="false" autocomplete="off" placeholder="Search by block height, block hash, tx hash, payment ID, address, or account number">
+                            <input v-model.trim="searchQuery" type="search" spellcheck="false" autocomplete="off" placeholder="Search by block height, block ID, tx hash, payment ID, address, or account number">
                             <button type="submit" class="searchbar-submit">Go</button>
                         </form>
 
@@ -533,7 +533,7 @@
                                             Next
                                             <i class="fas fa-arrow-right"></i>
                                         </button>
-                                        <button type="button" class="button button--ghost button--small" @click="copyText(blockView.block.hash, 'Block hash copied')">
+                                        <button type="button" class="button button--ghost button--small" @click="copyText(blockView.block.hash, 'Block ID copied')">
                                             <i class="fas fa-copy"></i>
                                             Copy
                                         </button>
@@ -592,10 +592,11 @@
                                     </div>
                                     <div class="detail-list">
                                         <div class="detail-row">
-                                            <span>Previous hash</span>
+                                            <span>Previous block ID</span>
                                             <a class="hash-string inline-link" :href="linkTo({ name: 'block', params: { hash: blockView.block.prevBlockHash } })" @click.prevent="goTo({ name: 'block', params: { hash: blockView.block.prevBlockHash } })">{{ blockView.block.prevBlockHash }}</a>
                                         </div>
-                                        <div class="detail-row"><span>Proof of work</span><strong class="hash-string">{{ blockView.block.proofOfWork }}</strong></div>
+                                        <div class="detail-row"><span>Proof-of-work hash</span><strong class="hash-string">{{ blockView.block.proofOfWork }}</strong></div>
+                                        <div class="detail-row" v-if="blockView.block.signatureWitness"><span>Signature witness (W<sub>B</sub>)</span><strong class="hash-string">{{ blockView.block.signatureWitness }}</strong></div>
                                         <div class="detail-row"><span>Version</span><strong>{{ blockView.block.majorVersion }}.{{ blockView.block.minorVersion }}</strong></div>
                                         <div class="detail-row"><span>Nonce</span><strong>{{ formatNumber(blockView.block.nonce) }}</strong></div>
                                         <div class="detail-row"><span>Orphaned</span><strong>{{ blockView.block.isOrphaned ? 'Yes' : 'No' }}</strong></div>
@@ -706,7 +707,7 @@
                                 </div>
                                 <div class="detail-list detail-list--grid">
                                     <div class="detail-row detail-row--wide" v-if="txView.tx.inBlockchain">
-                                        <span>Block hash</span>
+                                        <span>Block ID</span>
                                         <a class="hash-string inline-link" :href="linkTo({ name: 'block', params: { hash: txView.tx.blockHash } })" @click.prevent="goTo({ name: 'block', params: { hash: txView.tx.blockHash } })">{{ txView.tx.blockHash }}</a>
                                     </div>
                                     <div class="detail-row"><span>Type</span><strong>{{ txTypeName(txView.tx.txType) }}</strong></div>

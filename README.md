@@ -7,6 +7,9 @@ transactions (ML-DSA-65 signatures, ML-KEM-768 stealth outputs, nullifiers),
 bech32m `disc1…` / `tdisc1…` addresses, and on-chain account numbers
 (`H-I-C` / `H-I-T-C`).
 
+Block pages distinguish the signature-bound block ID from the DiscretePower
+proof-of-work hash and show the 32-byte signature witness committed by the ID.
+
 #### Installation
 
 1) It takes data from the `discreted` daemon, which should be reachable from the browser. Run it with an open RPC port and CORS enabled:
