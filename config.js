@@ -9,6 +9,10 @@ var blocksPerPage = 20;
 var recentConfirmedTxBlockRange = 1000;
 var avgHashrateBaselineHeight = 0;
 var avgHashrateBaselineCumulativeDifficulty = "0";
+// Used to rebuild the full payable address from account-number registry keys.
+// Mainnet and testnet share the numeric prefix; set the HRP to "tdisc" for testnet.
+var pqAddressNetworkPrefix = 0x3445db;
+var pqAddressHrp = "disc";
 // Discrete addresses are bech32m: HRP "disc" (mainnet) or "tdisc" (testnet),
 // separator "1", then ~5k chars of bech32 data. Real validation (checksum +
 // key-length check) happens in the client-side decoder; this is just a gate.

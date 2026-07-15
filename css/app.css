@@ -1956,3 +1956,24 @@ html[data-theme="dark"] select optgroup {
     white-space: normal;
     word-break: break-all;
 }
+
+.account-address-panel .panel-header {
+    align-items: center;
+    margin-bottom: 0.85rem;
+}
+
+.account-address-full {
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    color: var(--text-muted);
+    font-size: 0.76rem;
+    line-height: 1.5;
+    margin: 0;
+    max-width: 100%;
+    overflow: visible;
+    padding: 0.8rem 0.9rem;
+    text-overflow: clip;
+    white-space: normal;
+    word-break: break-all;
+}

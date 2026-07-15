@@ -40,6 +40,9 @@
     var PQ_VIEW_PUBKEY_BYTES = 1184;   // ML-KEM-768 public key
     var PQ_SPEND_PUBKEY_BYTES = 1952;  // ML-DSA-65 public key
     var PQ_SIGNATURE_BYTES = 3309;     // ML-DSA-65 signature
+    var PQ_ADDRESS_VERSION = 0x01;
+    var PQ_ADDRESS_NETWORK_PREFIX = Number(window.pqAddressNetworkPrefix) || 0x3445db;
+    var PQ_ADDRESS_HRP = String(window.pqAddressHrp || "disc").trim().toLowerCase();
     var TX_TYPE_COINBASE = 0;
     var TX_TYPE_TRANSFER = 1;
     var TX_TYPE_FREE_REG = 3;
@@ -208,6 +211,133 @@
             return null;
         }
         return result;
+    }
+
+    // Compact SHA3-256 implementation used only when reconstructing a full
+    // payable address from the two public keys returned by the account registry.
+    var KECCAK_MASK_64 = (1n << 64n) - 1n;
+    var KECCAK_ROTATION_OFFSETS = [
+        0, 1, 62, 28, 27,
+        36, 44, 6, 55, 20,
+        3, 10, 43, 25, 39,
+        41, 45, 15, 21, 8,
+        18, 2, 61, 56, 14
+    ];
+    var KECCAK_ROUND_CONSTANTS = [
+        0x0000000000000001n, 0x0000000000008082n, 0x800000000000808an, 0x8000000080008000n,
+        0x000000000000808bn, 0x0000000080000001n, 0x8000000080008081n, 0x8000000000008009n,
+        0x000000000000008an, 0x0000000000000088n, 0x0000000080008009n, 0x000000008000000an,
+        0x000000008000808bn, 0x800000000000008bn, 0x8000000000008089n, 0x8000000000008003n,
+        0x8000000000008002n, 0x8000000000000080n, 0x000000000000800an, 0x800000008000000an,
+        0x8000000080008081n, 0x8000000000008080n, 0x0000000080000001n, 0x8000000080008008n
+    ];
+
+    function rotateLeft64(value, offset) {
+        if (!offset) return value & KECCAK_MASK_64;
+        var shift = BigInt(offset);
+        return ((value << shift) | (value >> (64n - shift))) & KECCAK_MASK_64;
+    }
+
+    function keccakPermutation(state) {
+        for (var round = 0; round < KECCAK_ROUND_CONSTANTS.length; round += 1) {
+            var columns = new Array(5);
+            var deltas = new Array(5);
+            var x;
+            var y;
+
+            for (x = 0; x < 5; x += 1) {
+                columns[x] = state[x] ^ state[x + 5] ^ state[x + 10] ^ state[x + 15] ^ state[x + 20];
+            }
+            for (x = 0; x < 5; x += 1) {
+                deltas[x] = columns[(x + 4) % 5] ^ rotateLeft64(columns[(x + 1) % 5], 1);
+            }
+            for (y = 0; y < 5; y += 1) {
+                for (x = 0; x < 5; x += 1) {
+                    state[x + 5 * y] = (state[x + 5 * y] ^ deltas[x]) & KECCAK_MASK_64;
+                }
+            }
+
+            var moved = new Array(25).fill(0n);
+            for (y = 0; y < 5; y += 1) {
+                for (x = 0; x < 5; x += 1) {
+                    moved[y + 5 * ((2 * x + 3 * y) % 5)] = rotateLeft64(
+                        state[x + 5 * y],
+                        KECCAK_ROTATION_OFFSETS[x + 5 * y]
+                    );
+                }
+            }
+
+            for (y = 0; y < 5; y += 1) {
+                for (x = 0; x < 5; x += 1) {
+                    state[x + 5 * y] = (
+                        moved[x + 5 * y]
+                        ^ ((~moved[(x + 1) % 5 + 5 * y]) & moved[(x + 2) % 5 + 5 * y])
+                    ) & KECCAK_MASK_64;
+                }
+            }
+            state[0] = (state[0] ^ KECCAK_ROUND_CONSTANTS[round]) & KECCAK_MASK_64;
+        }
+    }
+
+    function sha3_256Bytes(bytes) {
+        var rateBytes = 136;
+        var input = Array.from(bytes || []);
+        var paddedLength = Math.ceil((input.length + 1) / rateBytes) * rateBytes;
+        var padded = new Uint8Array(paddedLength);
+        padded.set(input);
+        padded[input.length] ^= 0x06;
+        padded[paddedLength - 1] ^= 0x80;
+
+        var state = new Array(25).fill(0n);
+        for (var blockOffset = 0; blockOffset < padded.length; blockOffset += rateBytes) {
+            for (var index = 0; index < rateBytes; index += 1) {
+                state[Math.floor(index / 8)] ^= BigInt(padded[blockOffset + index]) << BigInt((index % 8) * 8);
+            }
+            keccakPermutation(state);
+        }
+
+        var output = [];
+        for (var outputIndex = 0; outputIndex < 32; outputIndex += 1) {
+            output.push(Number(
+                (state[Math.floor(outputIndex / 8)] >> BigInt((outputIndex % 8) * 8)) & 0xffn
+            ));
+        }
+        return output;
+    }
+
+    function encodeUnsignedVarint(value) {
+        var remaining = BigInt(value);
+        var bytes = [];
+        while (remaining >= 0x80n) {
+            bytes.push(Number((remaining & 0x7fn) | 0x80n));
+            remaining >>= 7n;
+        }
+        bytes.push(Number(remaining));
+        return bytes;
+    }
+
+    function encodePqAddress(viewPublicKey, spendPublicKey) {
+        var viewBytes = hexToBytes(normalizeHex(viewPublicKey));
+        var spendBytes = hexToBytes(normalizeHex(spendPublicKey));
+        if (viewBytes.length !== PQ_VIEW_PUBKEY_BYTES || spendBytes.length !== PQ_SPEND_PUBKEY_BYTES) return "";
+        if (PQ_ADDRESS_HRP !== "disc" && PQ_ADDRESS_HRP !== "tdisc") return "";
+
+        var preimage = [PQ_ADDRESS_VERSION]
+            .concat(encodeUnsignedVarint(PQ_ADDRESS_NETWORK_PREFIX), viewBytes, spendBytes);
+        var payload = preimage.concat(sha3_256Bytes(preimage).slice(0, 4));
+        var data = convertBits(payload, 8, 5, true);
+        if (!data) return "";
+
+        var checksumInput = bech32HrpExpand(PQ_ADDRESS_HRP).concat(data, [0, 0, 0, 0, 0, 0]);
+        var checksumValue = (bech32Polymod(checksumInput) ^ BECH32M_CONST) >>> 0;
+        var combined = data.slice();
+        for (var checksumIndex = 0; checksumIndex < 6; checksumIndex += 1) {
+            combined.push((checksumValue >>> (5 * (5 - checksumIndex))) & 31);
+        }
+
+        return PQ_ADDRESS_HRP + "1" + combined.map(function (value) {
+            return BECH32_CHARSET.charAt(value);
+        }).join("");
     }
 
     // Decodes and validates a Discrete PQ address. Returns null when the string
@@ -2603,14 +2733,18 @@
                         tx_index: parsed.txIndex
                     });
                     if (token !== this.routeRequestId) return false;
+                    var found = coerceBoolean(resolved.found);
+                    var viewPublicKey = resolved.view_pub || "";
+                    var spendPublicKey = resolved.spend_pub || "";
                     this.accountNumberView.result = {
                         accountNumber: parsed.value,
                         blockHeight: parsed.blockHeight,
                         txIndex: parsed.txIndex,
                         subaddressIndex: parsed.subaddressIndex,
-                        found: coerceBoolean(resolved.found),
-                        viewPublicKey: resolved.view_pub || "",
-                        spendPublicKey: resolved.spend_pub || ""
+                        found: found,
+                        address: found ? encodePqAddress(viewPublicKey, spendPublicKey) : "",
+                        viewPublicKey: viewPublicKey,
+                        spendPublicKey: spendPublicKey
                     };
                     this.accountNumberView.loading = false;
                     return true;

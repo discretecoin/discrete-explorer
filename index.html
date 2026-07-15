@@ -1136,11 +1136,25 @@
                                 </article>
                             </div>
 
+                            <article v-if="accountNumberView.result.found && accountNumberView.result.address" class="panel account-address-panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <p class="eyebrow">Resolution</p>
+                                        <h2>Full bech32m address</h2>
+                                    </div>
+                                    <button type="button" class="button button--ghost button--small" @click="copyText(accountNumberView.result.address, 'Address copied')">
+                                        <i class="fas fa-copy"></i>
+                                        Copy address
+                                    </button>
+                                </div>
+                                <p class="hash-string account-address-full" data-testid="resolved-account-address" aria-label="Full bech32m address">{{ accountNumberView.result.address }}</p>
+                            </article>
+
                             <div class="panel-grid">
                                 <article class="panel">
                                     <div class="panel-header">
                                         <div>
-                                            <p class="eyebrow">Resolution</p>
+                                            <p class="eyebrow">Identity</p>
                                             <h2>Registered identity keys</h2>
                                         </div>
                                     </div>
