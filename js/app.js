@@ -1628,7 +1628,7 @@
                     if (!registration.accountNumber) return transaction;
 
                     try {
-                        var resolved = await rpcCall(this.api, "resolvepqaccount", {
+                        var resolved = await rpcCall(this.api, "resolveaccountnumber", {
                             block_height: registration.blockHeight,
                             tx_index: txIndex
                         });
@@ -2542,7 +2542,7 @@
                     if (decoded) {
                         // The on-chain registry is keyed by the identity's raw keys.
                         try {
-                            var accountResult = await rpcCall(this.api, "getpqaccount", {
+                            var accountResult = await rpcCall(this.api, "getaccountnumber", {
                                 view_pub: decoded.viewPublicKey,
                                 spend_pub: decoded.spendPublicKey
                             });
@@ -2598,7 +2598,7 @@
                     var parsed = parseAccountNumber(this.route.params.accountNumber);
                     if (!parsed) throw new Error("Enter a valid account number like 123456-0-A.");
                     if (!isValidAccountNumber(parsed.value)) throw new Error("The check character does not match — the account number has a typo.");
-                    var resolved = await rpcCall(this.api, "resolvepqaccount", {
+                    var resolved = await rpcCall(this.api, "resolveaccountnumber", {
                         block_height: parsed.blockHeight,
                         tx_index: parsed.txIndex
                     });
