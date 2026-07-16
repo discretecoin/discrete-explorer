@@ -1133,8 +1133,12 @@
                                 <article class="metric-card" v-if="accountNumberView.result.subaddressIndex !== null">
                                     <span class="metric-label">Subaddress index</span>
                                     <strong>{{ formatNumber(accountNumberView.result.subaddressIndex) }}</strong>
-                                    <span class="metric-meta">Deposit routing index (H-I-T-C)</span>
+                                    <span class="metric-meta">Deposit routing index (H-I-A-T-C)</span>
                                 </article>
+                            </div>
+
+                            <div v-if="accountNumberView.result.found && !accountNumberView.result.fingerprintMatch" class="notice notice--error">
+                                The fingerprint in this account number does not match the identity currently registered at this slot. The number may contain an error, or the registration slot was repointed by a chain reorg — do not use it to send funds.
                             </div>
 
                             <article v-if="accountNumberView.result.found && accountNumberView.result.address" class="panel account-address-panel">

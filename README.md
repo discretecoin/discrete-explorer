@@ -5,7 +5,8 @@ It is a static single-page app: all data is fetched in the browser directly
 from a `discreted` node over its JSON RPC. It understands post-quantum
 transactions (ML-DSA-65 signatures, ML-KEM-768 stealth outputs, nullifiers),
 bech32m `disc1…` / `tdisc1…` addresses, and on-chain account numbers
-(`H-I-C` / `H-I-T-C`).
+(`H-I-A-C` / `H-I-A-T-C`, where A is a key fingerprint that guards against
+reorg substitution).
 
 Block pages distinguish the signature-bound block ID from the DiscretePower
 proof-of-work hash and show the 32-byte signature witness committed by the ID.

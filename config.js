@@ -17,6 +17,7 @@ var pqAddressHrp = "disc";
 // separator "1", then ~5k chars of bech32 data. Real validation (checksum +
 // key-length check) happens in the client-side decoder; this is just a gate.
 var addressPattern = new RegExp("^(disc|tdisc)1[02-9ac-hj-np-z]{1000,}$");
-// Account numbers: H-I-C (base) or H-I-T-C (deposit subaddress), Luhn mod-36 check char.
-var accountNumberPattern = new RegExp("^\\d+-\\d+-[0-9A-Za-z]$");
-var accountNumberWithIndexPattern = new RegExp("^\\d+-\\d+-\\d+-[0-9A-Za-z]$");
+// Account numbers: H-I-A-C (base) or H-I-A-T-C (deposit subaddress). A = 4-char
+// Crockford key fingerprint (reorg failsafe); C = Crockford Luhn mod-32 check char.
+var accountNumberPattern = new RegExp("^\\d+-\\d+-[0-9A-Za-z]{4}-[0-9A-Za-z]$");
+var accountNumberWithIndexPattern = new RegExp("^\\d+-\\d+-[0-9A-Za-z]{4}-\\d+-[0-9A-Za-z]$");

@@ -32,10 +32,10 @@
         : /^(disc|tdisc)1[02-9ac-hj-np-z]{1000,}$/;
     var ACCOUNT_NUMBER_PATTERN = window.accountNumberPattern instanceof RegExp
         ? window.accountNumberPattern
-        : /^\d+-\d+-[0-9A-Za-z]$/;
+        : /^\d+-\d+-[0-9A-Za-z]{4}-[0-9A-Za-z]$/;
     var ACCOUNT_NUMBER_WITH_INDEX_PATTERN = window.accountNumberWithIndexPattern instanceof RegExp
         ? window.accountNumberWithIndexPattern
-        : /^\d+-\d+-\d+-[0-9A-Za-z]$/;
+        : /^\d+-\d+-[0-9A-Za-z]{4}-\d+-[0-9A-Za-z]$/;
     // Discrete PQ constants (must match CryptoNoteConfig / TransactionExtra):
     var PQ_VIEW_PUBKEY_BYTES = 1184;   // ML-KEM-768 public key
     var PQ_SPEND_PUBKEY_BYTES = 1952;  // ML-DSA-65 public key
@@ -115,18 +115,35 @@
         return new RegExp("^[0-9a-f]".concat(exactLength, "$")).test(normalized);
     }
 
+    // Lenient Crockford canonicalization: upper-case, and map the ambiguous
+    // look-alikes to their canonical symbol (O -> 0, I/L -> 1). Never throws.
+    function crockfordCanonical(value) {
+        var up = String(value || "").toUpperCase();
+        var out = "";
+        for (var i = 0; i < up.length; i += 1) {
+            var c = up.charAt(i);
+            if (c === "O") c = "0";
+            else if (c === "I" || c === "L") c = "1";
+            out += c;
+        }
+        return out;
+    }
+
     function normalizeAccountNumber(value) {
         var raw = String(value || "").trim();
         if (!raw) return "";
         var parts = raw.split("-");
-        if (parts.length !== 3 && parts.length !== 4) return raw;
-        var check = String(parts[parts.length - 1] || "").toUpperCase();
-        return parts.slice(0, parts.length - 1).join("-") + "-" + check;
+        // H-I-A-C (4 fields) or H-I-A-T-C (5 fields). Canonicalize the Crockford
+        // fields (the fingerprint A at index 2, and the trailing check char).
+        if (parts.length !== 4 && parts.length !== 5) return raw;
+        parts[2] = crockfordCanonical(parts[2]);
+        parts[parts.length - 1] = crockfordCanonical(parts[parts.length - 1]);
+        return parts.join("-");
     }
 
-    // Parses both account-number forms: H-I-C (base account) and H-I-T-C
-    // (deposit subaddress, T = routing index). C is Luhn mod-36 over the
-    // concatenated decimal digits of the preceding fields.
+    // Parses both account-number forms: H-I-A-C (base account) and H-I-A-T-C
+    // (deposit subaddress, T = routing index). A is the 4-char Crockford key
+    // fingerprint; C is a Crockford Luhn mod-32 over the symbols of H, I, A(, T).
     function parseAccountNumber(value) {
         var normalized = normalizeAccountNumber(value);
         var withIndex = ACCOUNT_NUMBER_WITH_INDEX_PATTERN.test(normalized);
@@ -134,25 +151,27 @@
         var parts = normalized.split("-");
         var blockHeight = coerceInteger(parts[0]);
         var txIndex = coerceInteger(parts[1]);
-        var subaddressIndex = withIndex ? coerceInteger(parts[2]) : null;
+        var fingerprint = parts[2];
+        var subaddressIndex = withIndex ? coerceInteger(parts[3]) : null;
         if (blockHeight === null || blockHeight < 0 || txIndex === null || txIndex < 0) return null;
         if (withIndex && (subaddressIndex === null || subaddressIndex < 0)) return null;
         return {
             value: normalized,
             blockHeight: blockHeight,
             txIndex: txIndex,
+            fingerprint: fingerprint,
             subaddressIndex: subaddressIndex,
             checkDigit: parts[parts.length - 1],
             luhnPayload: withIndex
-                ? String(parts[0]) + String(parts[1]) + String(parts[2])
-                : String(parts[0]) + String(parts[1])
+                ? String(parts[0]) + String(parts[1]) + fingerprint + String(parts[3])
+                : String(parts[0]) + String(parts[1]) + fingerprint
         };
     }
 
     function isValidAccountNumber(value) {
         var parsed = parseAccountNumber(value);
         if (!parsed) return false;
-        return luhnMod36Generate(parsed.luhnPayload) === parsed.checkDigit;
+        return crockfordLuhn32(parsed.luhnPayload) === parsed.checkDigit;
     }
 
     function isAccountNumberCandidate(value) {
@@ -621,27 +640,35 @@
         return result;
     }
 
-    function luhnMod36Generate(input) {
-        var alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    // Crockford Base32 alphabet (no ambiguous I, L, O, U). Both the fingerprint A
+    // and the check char C live in this alphabet, so the whole number is unambiguous.
+    var CROCKFORD_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+    function crockfordValue(character) {
+        var c = String(character || "").toUpperCase();
+        if (c >= "0" && c <= "9") return c.charCodeAt(0) - 48;
+        if (c === "O") return 0;
+        if (c === "I" || c === "L") return 1;
+        return CROCKFORD_ALPHABET.indexOf(c);  // -1 if not a Crockford symbol
+    }
+
+    // Luhn mod-32 over a run of Crockford symbols; returns one Crockford check char.
+    function crockfordLuhn32(input) {
+        var n = 32;
         var sum = 0;
         var shouldDouble = true;
-
-        for (var index = String(input || "").length - 1; index >= 0; index -= 1) {
-            var character = String(input).charAt(index).toUpperCase();
-            var value = alphabet.indexOf(character);
+        var symbols = String(input || "");
+        for (var index = symbols.length - 1; index >= 0; index -= 1) {
+            var value = crockfordValue(symbols.charAt(index));
             if (value < 0) return "";
-
             if (shouldDouble) {
                 value *= 2;
-                if (value >= 36) value = Math.floor(value / 36) + (value % 36);
+                if (value >= n) value = Math.floor(value / n) + (value % n);
             }
-
             sum += value;
             shouldDouble = !shouldDouble;
         }
-
-        var remainder = sum % 36;
-        return alphabet.charAt((36 - remainder) % 36);
+        return CROCKFORD_ALPHABET.charAt((n - sum % n) % n);
     }
 
     function loadScriptOnce(src) {
@@ -1723,15 +1750,6 @@
                 this.historicStats.error = "";
                 await this.loadHistoricStatsData(++this.routeRequestId, false);
             },
-            computeAccountNumber: function (blockHeight, txIndex) {
-                var normalizedHeight = coerceInteger(blockHeight);
-                var normalizedTxIndex = coerceInteger(txIndex);
-                if (normalizedHeight === null || normalizedHeight < 0 || normalizedTxIndex === null || normalizedTxIndex < 0) return "";
-                var payload = String(normalizedHeight) + String(normalizedTxIndex);
-                var checkDigit = luhnMod36Generate(payload);
-                if (!checkDigit) return "";
-                return "".concat(normalizedHeight, "-").concat(normalizedTxIndex, "-").concat(checkDigit);
-            },
             extractBlockTransactionIndex: function (block, transactionHash) {
                 var normalizedHash = String(transactionHash || "").trim().toLowerCase();
                 if (!block || !Array.isArray(block.transactions) || !normalizedHash) return null;
@@ -1761,8 +1779,6 @@
                     if (txIndex === null) return transaction;
 
                     registration.txIndex = txIndex;
-                    registration.accountNumber = this.computeAccountNumber(registration.blockHeight, txIndex);
-                    if (!registration.accountNumber) return transaction;
 
                     try {
                         var resolved = await rpcCall(this.api, "resolveaccountnumber", {
@@ -1771,6 +1787,9 @@
                         });
                         if (token !== this.routeRequestId) return null;
                         registration.resolved = coerceBoolean(resolved.found);
+                        // The daemon renders the full H-I-A-C number (fingerprint A over the
+                        // resolved keys). It is empty until the registration is past finality.
+                        registration.accountNumber = resolved.account_number || "";
                         if (registration.resolved && registration.viewPublicKey && registration.spendPublicKey) {
                             registration.keysMatch = normalizeHex(resolved.view_pub) === normalizeHex(registration.viewPublicKey)
                                 && normalizeHex(resolved.spend_pub) === normalizeHex(registration.spendPublicKey);
@@ -2688,7 +2707,8 @@
                                 var blockHeight = coerceInteger(accountResult.block_height);
                                 var txIndex = coerceInteger(accountResult.tx_index);
                                 accountNumber = {
-                                    accountNumber: this.computeAccountNumber(blockHeight, txIndex),
+                                    // Full H-I-A-C string from the daemon (fingerprint A over these keys).
+                                    accountNumber: accountResult.account_number || "",
                                     blockHeight: blockHeight,
                                     txIndex: txIndex
                                 };
@@ -2733,7 +2753,7 @@
                 this.accountNumberView.error = "";
                 try {
                     var parsed = parseAccountNumber(this.route.params.accountNumber);
-                    if (!parsed) throw new Error("Enter a valid account number like 123456-0-A.");
+                    if (!parsed) throw new Error("Enter a valid account number like 4821-7-KQ9D-X.");
                     if (!isValidAccountNumber(parsed.value)) throw new Error("The check character does not match — the account number has a typo.");
                     var resolved = await rpcCall(this.api, "resolveaccountnumber", {
                         block_height: parsed.blockHeight,
@@ -2743,13 +2763,23 @@
                     var found = coerceBoolean(resolved.found);
                     var viewPublicKey = resolved.view_pub || "";
                     var spendPublicKey = resolved.spend_pub || "";
+                    // Failsafe check: the fingerprint A in the typed number must match the
+                    // one the daemon derives from the resolved keys. A mismatch means the
+                    // number does not belong to the identity now at (H,I) — e.g. a reorg
+                    // repointed the slot, or the number was crafted. Only informational here.
+                    var fingerprintMatch = true;
+                    if (found && resolved.account_number) {
+                        var canonicalParsed = parseAccountNumber(resolved.account_number);
+                        fingerprintMatch = !!canonicalParsed && canonicalParsed.fingerprint === parsed.fingerprint;
+                    }
                     this.accountNumberView.result = {
                         accountNumber: parsed.value,
                         blockHeight: parsed.blockHeight,
                         txIndex: parsed.txIndex,
                         subaddressIndex: parsed.subaddressIndex,
                         found: found,
-                        address: found ? encodePqAddress(viewPublicKey, spendPublicKey) : "",
+                        fingerprintMatch: fingerprintMatch,
+                        address: (found && fingerprintMatch) ? encodePqAddress(viewPublicKey, spendPublicKey) : "",
                         viewPublicKey: viewPublicKey,
                         spendPublicKey: spendPublicKey
                     };
