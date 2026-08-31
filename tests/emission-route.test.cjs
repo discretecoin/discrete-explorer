@@ -35,6 +35,9 @@ test("ships a self-contained official-domain emission export", function () {
 
     assert.match(html, /<link rel="canonical" href="https:\/\/explorer\.discrete\.cash\/emission\/"/);
     assert.match(html, /href="https:\/\/explorer\.discrete\.cash\/" aria-label="Back to Discrete Explorer"/);
+    const desktopNavigation = html.match(/<nav class="nav-links"[\s\S]*?<\/nav>/i)?.[0] ?? "";
+    assert.match(desktopNavigation, /href="#explorer">Emission<\/a>/i);
+    assert.doesNotMatch(desktopNavigation, /href="#explorer">Explorer<\/a>/i);
     assert.doesNotMatch(html, /matthewfreeman\.github\.io/i);
     assert.ok(assetPaths.length > 10, "expected the static export to reference its bundled assets");
 
@@ -93,7 +96,7 @@ test("binds every emission artifact to the reviewed source commit", function () 
         assert.equal(manifest.get(relativePath), digest, `digest mismatch: ${relativePath}`);
     }
 
-    const sourceCommit = "3df9faeaf4738310c6dd3b98b1b1c33d78d9f41d";
+    const sourceCommit = "f26d090fa7418a6395bc18d9caafc51d03edfadc";
     const source = read("emission/SOURCE.md");
     assert.match(source, new RegExp(`MatthewFreeman/discrete-explorer/tree/${sourceCommit}`));
     assert.equal(
