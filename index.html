@@ -885,6 +885,8 @@
                                                             <summary>Authorization key, ML-DSA-65 ({{ formatNumber(input.data.input.auth_pub.length / 2) }} bytes)</summary>
                                                             <p class="hash-string detail-fold-body">{{ input.data.input.auth_pub }}</p>
                                                         </details>
+                                                        <!-- Grouped authorization: the key travels, and is signed for, once on an earlier input. -->
+                                                        <p class="detail-fold" v-else-if="input.data.input && input.data.input.key_ref !== undefined">Authorized by the key of input {{ formatNumber(input.data.input.key_ref) }}</p>
                                                     </td>
                                                 </template>
                                                 <template v-else>
