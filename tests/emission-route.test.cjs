@@ -96,7 +96,7 @@ test("binds every emission artifact to the reviewed source commit", function () 
         assert.equal(manifest.get(relativePath), digest, `digest mismatch: ${relativePath}`);
     }
 
-    const sourceCommit = "4834df1f6b2382ccfd0327bb6307c16e3762fc09";
+    const sourceCommit = "540b8fdfb9e45ba20d73bc077904e08f6bfdb633";
     const source = read("emission/SOURCE.md");
     assert.match(source, new RegExp(`MatthewFreeman/discrete-explorer/tree/${sourceCommit}`));
     assert.equal(
@@ -112,5 +112,5 @@ test("preserves the reviewed 120-month CSV artifact", function () {
     const rows = csv.toString("utf8").trimEnd().split(/\r?\n/);
 
     assert.equal(rows.length, 121);
-    assert.equal(digest, "F9EF57271022D67C65F2224F2173EF9C8F3DF34B9D8B5D3375C3238729EB8A85");
+    assert.equal(digest, "1C5F80D0ED182ECC8F9131FFD7DFEA9A25F28744F09049C0DEC9A828C6F83430");
 });
