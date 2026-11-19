@@ -1315,15 +1315,9 @@
                 var points = blocks.map(function (block) {
                     var height = coerceInteger(block.height) || 0;
                     var timestamp = coerceInteger(block.timestamp) || 0;
-                    var chartTimestamp = timestamp > 0 ? timestamp : 1781619660;
                     return {
                         height: height,
                         timestamp: timestamp,
-                        chartTimestamp: chartTimestamp,
-                        chartTime: new Date(chartTimestamp * 1000).toISOString(),
-                        label: timestamp > 0
-                            ? formatEnglishLocalDate(timestamp, { hour: "2-digit", minute: "2-digit", hour12: false })
-                            : "Genesis",
                         dateTime: timestamp > 0 ? this.formatDateTime(timestamp) : "Genesis block",
                         difficulty: Number(block.difficulty || 0),
                         txCount: coerceInteger(block.transactions_count) || 0,
@@ -1338,7 +1332,7 @@
 
                 return {
                     points: points,
-                    labels: points.map(function (point) { return point.chartTime; }),
+                    labels: points.map(function (point) { return point.height; }),
                     latest: difficulties[difficulties.length - 1] || 0,
                     average: average(difficulties),
                     averageTxCount: average(txCounts),
@@ -1833,7 +1827,6 @@
                 }
 
                 try {
-                    if (!window.moment) await loadScriptOnce("/js/moment.min.js");
                     if (!window.Chart) await loadScriptOnce("/js/Chart.bundle.min.js");
                 } catch (error) {
                     this.destroyDifficultyChart();
@@ -1866,7 +1859,7 @@
                                 yAxisID: "difficulty",
                                 data: model.points.map(function (point) {
                                     return {
-                                        x: point.chartTime,
+                                        x: point.height,
                                         y: point.difficulty
                                     };
                                 }),
@@ -1904,24 +1897,8 @@
                         scales: {
                             xAxes: [
                                 {
-                                    type: "time",
-                                    time: {
-                                        parser: false,
-                                        unit: "minute",
-                                        unitStepSize: 60,
-                                        round: "second",
-                                        displayFormats: {
-                                            millisecond: "SSS [ms]",
-                                            second: "HH:mm:ss",
-                                            minute: "HH:mm",
-                                            hour: "HH:mm",
-                                            day: "MMM D",
-                                            week: "ll",
-                                            month: "MMM YYYY",
-                                            quarter: "[Q]Q - YYYY",
-                                            year: "YYYY"
-                                        }
-                                    },
+                                    type: "linear",
+                                    position: "bottom",
                                     gridLines: {
                                         color: lineColor,
                                         display: false,
@@ -1932,7 +1909,11 @@
                                         fontColor: textSoft,
                                         maxRotation: 0,
                                         maxTicksLimit: 8,
-                                        minRotation: 0
+                                        minRotation: 0,
+                                        precision: 0,
+                                        callback: function (height) {
+                                            return height >= 0 ? _this.formatNumber(height) : "";
+                                        }
                                     }
                                 }
                             ],
